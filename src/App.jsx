@@ -251,6 +251,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
   const [imgBase64, setImgBase64] = useState(null);
   const [barcodeVal, setBarcodeVal] = useState(null);
   const fileRef = useRef();
+  const cameraRef = useRef();
 
   const filteredFavs = favorites.filter(f => !query || f.name.toLowerCase().includes(query.toLowerCase()));
   const filteredRecent = recentFoods.filter(f =>
@@ -485,18 +486,40 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
 
           {/* ── PHOTO MODE ── */}
           {mode==="photo" && (<>
-            <div style={{ border:`2px dashed ${imgPreview?RED:BORDER}`, background:WHITE, padding:"24px 16px", textAlign:"center", cursor:"pointer", marginBottom:12 }}
-              onClick={()=>!loading&&fileRef.current?.click()}>
-              {imgPreview
-                ? <img src={imgPreview} alt="Food" style={{ maxWidth:"100%", maxHeight:180, objectFit:"contain" }}/>
-                : <><div style={{ fontSize:34, marginBottom:8 }}>📷</div><div style={{ fontFamily:"'Bebas Neue'", fontSize:16, letterSpacing:1, marginBottom:4 }}>Tap to Upload Photo</div><div style={{ fontSize:12, color:MUTED }}>Claude AI will analyze the nutrition facts</div></>
-              }
-            </div>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={e=>handleFile(e.target.files[0])}/>
+            {/* Image preview area */}
+            {imgPreview
+              ? <div style={{ position:"relative", marginBottom:12 }}>
+                  <img src={imgPreview} alt="Food" style={{ width:"100%", maxHeight:220, objectFit:"contain", background:BLACK, display:"block" }}/>
+                  <button onClick={()=>{ setImgPreview(null); setImgBase64(null); setResult(null); }}
+                    style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.7)", border:`1px solid ${BORDER}`, color:WHITE, width:28, height:28, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                </div>
+              : <div style={{ marginBottom:14 }}>
+                  {/* Two option buttons */}
+                  <div style={{ display:"flex", gap:10, marginBottom:10 }}>
+                    <button onClick={()=>!loading&&cameraRef.current?.click()}
+                      style={{ flex:1, background:BLACK, border:`1.5px solid ${RED}`, color:WHITE, padding:"20px 12px", cursor:"pointer", textAlign:"center" }}>
+                      <div style={{ fontSize:28, marginBottom:6 }}>📷</div>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:1, color:WHITE }}>Take Photo</div>
+                      <div style={{ fontSize:11, color:"#666", marginTop:3 }}>Use your camera</div>
+                    </button>
+                    <button onClick={()=>!loading&&fileRef.current?.click()}
+                      style={{ flex:1, background:BLACK, border:`1.5px solid ${BORDER}`, color:WHITE, padding:"20px 12px", cursor:"pointer", textAlign:"center" }}>
+                      <div style={{ fontSize:28, marginBottom:6 }}>🖼️</div>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:1, color:WHITE }}>Upload Photo</div>
+                      <div style={{ fontSize:11, color:"#666", marginTop:3 }}>From your library</div>
+                    </button>
+                  </div>
+                  <div style={{ fontSize:11, color:MUTED, textAlign:"center" }}>Claude AI will analyze the nutrition facts</div>
+                </div>
+            }
+            {/* Camera input — opens camera directly */}
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={e=>handleFile(e.target.files[0])}/>
+            {/* File input — opens photo library */}
+            <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>handleFile(e.target.files[0])}/>
+
             {imgPreview && !result && (
               <div style={{ display:"flex", gap:8, marginBottom:12 }}>
                 <button style={S.btn} onClick={analyzePhoto} disabled={loading}>{loading?"⚡ Analyzing...":"⚡ Analyze with AI"}</button>
-                <button style={S.btnSm} onClick={()=>{ setImgPreview(null); setImgBase64(null); setResult(null); }}>✕</button>
               </div>
             )}
             {loading && <div style={{ textAlign:"center", padding:"12px 0", color:MUTED, fontSize:13 }}>🤖 Claude is analyzing your photo...</div>}
