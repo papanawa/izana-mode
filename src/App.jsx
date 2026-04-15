@@ -17,13 +17,40 @@ const lsGet = (key, fallback) => { try { const v = localStorage.getItem(key); re
 const lsSet = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
 
 const RANKS = [
-  { min:0,  kanji:"新", title:"Newcomer",   sub:"Shiniri",      color:MUTED  },
-  { min:5,  kanji:"戦", title:"Warrior",    sub:"Senshi",       color:BLACK  },
-  { min:15, kanji:"幹", title:"Executive",  sub:"Kanbu",        color:"#8B4513" },
-  { min:30, kanji:"副", title:"Commander",  sub:"Fuku Souchou", color:RED    },
-  { min:50, kanji:"天", title:"King of Kings", sub:"Tenjiku Supreme", color:RED },
+  { min:0,  kanji:"新", title:"Newcomer",      sub:"Kouhai",         color:MUTED  },
+  { min:5,  kanji:"戦", title:"Warrior",       sub:"Senshi",         color:BLACK  },
+  { min:15, kanji:"幹", title:"Executive",     sub:"Kanbu",          color:"#8B4513" },
+  { min:30, kanji:"副", title:"Commander",     sub:"Fuku Souchou",   color:RED    },
+  { min:50, kanji:"天", title:"King of Kings", sub:"Tenjiku Supreme",color:RED    },
 ];
 const getRank = (s) => [...RANKS].reverse().find(r => s >= r.min) || RANKS[0];
+
+const DIET_OPTIONS = ["None","Carnivore","Keto","Paleo","Mediterranean","Vegan","Vegetarian","Pescatarian","Gluten-Free","Dairy-Free","Custom"];
+
+const ACTIVITY_LEVELS = {
+  sedentary:  { label:"Sedentary — desk job, no exercise",      mult:1.2   },
+  light:      { label:"Light — 1-3 workouts/week",              mult:1.375 },
+  moderate:   { label:"Moderate — 3-5 workouts/week",           mult:1.55  },
+  active:     { label:"Active — 6-7 workouts/week",             mult:1.725 },
+  veryActive: { label:"Very Active — athlete / physical job",   mult:1.9   },
+};
+
+const DIET_TYPES = ["None","High Protein","Keto","Paleo","Mediterranean","Vegetarian","Vegan","Gluten-Free","Dairy-Free"];
+
+const calcTDEE = ({ age, weightLbs, heightIn, sex, activity, goal }) => {
+  const kg = parseFloat(weightLbs) * 0.453592;
+  const cm = parseFloat(heightIn) * 2.54;
+  const a  = parseFloat(age);
+  if (!kg||!cm||!a) return null;
+  const bmr = sex==="male" ? (10*kg + 6.25*cm - 5*a + 5) : (10*kg + 6.25*cm - 5*a - 161);
+  const tdee = Math.round(bmr * (ACTIVITY_LEVELS[activity]?.mult||1.55));
+  const adj  = { cut:-500, bulk:300, recomp:0, endure:200 }[goal]||0;
+  const calories = Math.max(1200, tdee + adj);
+  const protein  = Math.round(parseFloat(weightLbs) * 0.82);
+  const fat      = Math.round(calories * 0.25 / 9);
+  const carbs    = Math.max(20, Math.round((calories - protein*4 - fat*9) / 4));
+  return { calories, protein, carbs, fat };
+};
 
 const ANIM = `
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&family=Noto+Serif+JP:wght@700&display=swap');
@@ -35,6 +62,8 @@ const ANIM = `
   @keyframes kanjiDrop{0%{opacity:0;transform:translateY(-30px) scale(1.4)}100%{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
   @keyframes scanLine{0%{top:10%}50%{top:85%}100%{top:10%}}
+  @keyframes rankPulse{0%{transform:scale(0.5);opacity:0}50%{transform:scale(1.2);opacity:1}100%{transform:scale(1);opacity:1}}
+  @keyframes rankShine{0%{opacity:0;transform:translateY(20px)}100%{opacity:1;transform:translateY(0)}}
   .spin-in{animation:spinIn 1.6s cubic-bezier(.22,1,.36,1) forwards}
   .spin-slow{animation:spinSlow 12s linear infinite}
   .fade-up{animation:fadeUp 0.7s ease forwards}
@@ -739,8 +768,10 @@ function Onboarding({ onComplete }) {
   const [step,setStep]=useState(0);
   const [name,setName]=useState("");
   const [goal,setGoal]=useState(null);
+  const [stats,setStats]=useState({ age:"", weightLbs:"", heightFt:"", heightIn:"", sex:"male", activity:"moderate" });
+  const [calcedGoals,setCalcedGoals]=useState(null);
   const [phase,setPhase]=useState("in");
-  const advance=(n)=>{ setPhase("out"); setTimeout(()=>{ setStep(n); setPhase("in"); },400); };
+  const advance=(n, tdee)=>{ if(tdee) setCalcedGoals(tdee); setPhase("out"); setTimeout(()=>{ setStep(n); setPhase("in"); },400); };
   const base={ position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center",
     justifyContent:"center", opacity:phase==="out"?0:1, transform:phase==="out"?"translateX(-40px)":"translateX(0)",
     transition:"opacity 0.35s ease, transform 0.35s ease", padding:"40px 28px" };
@@ -818,12 +849,16 @@ function Onboarding({ onComplete }) {
           <div style={{ fontFamily:"'Bebas Neue'", fontSize:34, color:TEXT, letterSpacing:2 }}>WHO TRAINS TODAY?</div>
           <div style={{ height:2, background:RED, marginTop:10 }}/>
         </div>
-        <div style={{ width:"100%", marginBottom:24 }}>
+
+        {/* Name */}
+        <div style={{ width:"100%", marginBottom:20 }}>
           <div style={{ fontFamily:"'Bebas Neue'", fontSize:12, color:MUTED, letterSpacing:3, marginBottom:8 }}>YOUR NAME</div>
           <input value={name} onChange={e=>setName(e.target.value)} placeholder="Enter your name..."
             style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${name?RED:BORDER}`, fontFamily:"'Bebas Neue'", fontSize:24, letterSpacing:2, padding:"8px 0", outline:"none", transition:"border-color 0.3s" }}/>
         </div>
-        <div style={{ width:"100%", marginBottom:28 }}>
+
+        {/* Goal */}
+        <div style={{ width:"100%", marginBottom:20 }}>
           <div style={{ fontFamily:"'Bebas Neue'", fontSize:12, color:MUTED, letterSpacing:3, marginBottom:12 }}>YOUR MISSION</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             {[{ id:"cut", kanji:"削", label:"Cut", sub:"Lose fat" },{ id:"bulk", kanji:"増", label:"Bulk", sub:"Build mass" },{ id:"recomp", kanji:"変", label:"Recomp", sub:"Transform" },{ id:"endure", kanji:"耐", label:"Endure", sub:"Build stamina" }].map(g=>(
@@ -835,20 +870,71 @@ function Onboarding({ onComplete }) {
             ))}
           </div>
         </div>
-        <button onClick={()=>name&&goal&&advance(4)} style={{ background:name&&goal?RED:CARD2, color:name&&goal?WHITE:MUTED, border:"none", borderRadius:0, fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:2, padding:"16px", cursor:name&&goal?"pointer":"not-allowed", width:"100%", transition:"all 0.3s" }}>
-          {name&&goal?`ENTER THE DOJO, ${name.toUpperCase()} ›`:"FILL IN BOTH FIELDS"}
+
+        {/* Stats for TDEE */}
+        <div style={{ width:"100%", marginBottom:20 }}>
+          <div style={{ fontFamily:"'Bebas Neue'", fontSize:12, color:MUTED, letterSpacing:3, marginBottom:4 }}>YOUR STATS <span style={{ fontSize:10, color:MUTED, letterSpacing:1 }}>(for calorie targets)</span></div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+            <div>
+              <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>AGE</div>
+              <input value={stats.age} onChange={e=>setStats(s=>({...s,age:e.target.value}))} placeholder="e.g. 28" type="number"
+                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.age?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>WEIGHT (lbs)</div>
+              <input value={stats.weightLbs} onChange={e=>setStats(s=>({...s,weightLbs:e.target.value}))} placeholder="e.g. 185" type="number"
+                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.weightLbs?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>HEIGHT (ft)</div>
+              <input value={stats.heightFt} onChange={e=>setStats(s=>({...s,heightFt:e.target.value}))} placeholder="e.g. 5" type="number"
+                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.heightFt?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>HEIGHT (in)</div>
+              <input value={stats.heightIn} onChange={e=>setStats(s=>({...s,heightIn:e.target.value}))} placeholder="e.g. 10" type="number"
+                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid `+BORDER, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
+            </div>
+          </div>
+          {/* Sex */}
+          <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+            {["male","female"].map(s=>(
+              <button key={s} onClick={()=>setStats(st=>({...st,sex:s}))}
+                style={{ flex:1, padding:"8px", background:stats.sex===s?BLACK:"transparent", color:stats.sex===s?WHITE:TEXT, border:`1px solid ${stats.sex===s?BLACK:BORDER}`, fontFamily:"'Bebas Neue'", fontSize:13, letterSpacing:1, cursor:"pointer" }}>
+                {s.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          {/* Activity */}
+          <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:6 }}>ACTIVITY LEVEL</div>
+          {Object.entries(ACTIVITY_LEVELS).map(([k,v])=>(
+            <button key={k} onClick={()=>setStats(s=>({...s,activity:k}))}
+              style={{ width:"100%", textAlign:"left", padding:"8px 10px", marginBottom:4, background:stats.activity===k?RED+"15":"transparent", color:stats.activity===k?RED:MUTED, border:`1px solid ${stats.activity===k?RED:BORDER}`, borderLeft:`3px solid ${stats.activity===k?RED:"transparent"}`, fontFamily:"'DM Sans'", fontSize:12, cursor:"pointer" }}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        <button onClick={()=>{
+          if(!name||!goal) return;
+          const heightIn = stats.heightFt && (parseFloat(stats.heightFt)*12 + parseFloat(stats.heightIn||0));
+          const tdee = calcTDEE({ ...stats, heightIn, goal });
+          advance(4, tdee);
+        }} style={{ background:name&&goal?RED:CARD2, color:name&&goal?WHITE:MUTED, border:"none", borderRadius:0, fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:2, padding:"16px", cursor:name&&goal?"pointer":"not-allowed", width:"100%", transition:"all 0.3s", marginBottom:8 }}>
+          {name&&goal?`ENTER THE DOJO, ${name.toUpperCase()} ›`:"FILL IN NAME & MISSION FIRST"}
         </button>
+        <div style={{ textAlign:"center", fontSize:11, color:MUTED, paddingBottom:20 }}>Stats optional — you can set targets in Settings later</div>
       </div>
     </div>
   );
 
-  if(step===4) return <FinalTransition name={name} goal={goal} onComplete={onComplete}/>;
+  if(step===4) return <FinalTransition name={name} goal={goal} calcedGoals={calcedGoals} onComplete={onComplete}/>;
   return null;
 }
 
-function FinalTransition({ name, goal, onComplete }) {
+function FinalTransition({ name, goal, calcedGoals, onComplete }) {
   const [sub,setSub]=useState(0);
-  useEffect(()=>{ const t1=setTimeout(()=>setSub(1),600), t2=setTimeout(()=>setSub(2),1800), t3=setTimeout(()=>onComplete({name,goal}),3200); return ()=>{ clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); }; },[]);
+  useEffect(()=>{ const t1=setTimeout(()=>setSub(1),600), t2=setTimeout(()=>setSub(2),1800), t3=setTimeout(()=>onComplete({name,goal,calcedGoals}),3200); return ()=>{ clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); }; },[]);
   return (
     <div style={{ position:"fixed", inset:0, background:BLACK, zIndex:1000, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
       <YinYang size={100} className="spin-in" style={{ marginBottom:32 }}/>
@@ -861,6 +947,25 @@ function FinalTransition({ name, goal, onComplete }) {
         <div style={{ width:200, height:2, background:"#222", overflow:"hidden" }}><div style={{ height:"100%", background:RED, animation:"lineGrow 1.2s ease forwards" }}/></div>
       </div>}
       {["天","代","横","浜"].map((k,i)=>(<div key={k} style={{ position:"absolute", fontFamily:"'Bebas Neue'", fontSize:22, color:RED, opacity:0.2, top:i<2?24:"auto", bottom:i>=2?24:"auto", left:i%2===0?24:"auto", right:i%2===1?24:"auto" }}>{k}</div>))}
+    </div>
+  );
+}
+
+/* ── RANK UP CELEBRATION ─────────────────────────── */
+function RankUpCelebration({ rank, onDone }) {
+  useEffect(()=>{ const t=setTimeout(onDone,3500); return ()=>clearTimeout(t); },[]);
+  return (
+    <div style={{ position:"fixed", inset:0, background:BLACK, zIndex:2000, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", overflow:"hidden" }}
+      onClick={onDone}>
+      <div style={{ position:"absolute", inset:0, background:`radial-gradient(circle at center, ${rank.color}22 0%, transparent 70%)` }}/>
+      <div style={{ fontFamily:"'Bebas Neue'", fontSize:120, color:rank.color, lineHeight:1, animation:"rankPulse 0.8s cubic-bezier(.22,1,.36,1) forwards", marginBottom:8 }}>{rank.kanji}</div>
+      <div style={{ textAlign:"center", animation:"rankShine 0.6s ease 0.5s both" }}>
+        <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:"#555", letterSpacing:5, marginBottom:8 }}>RANK UP</div>
+        <div style={{ fontFamily:"'Bebas Neue'", fontSize:38, color:WHITE, letterSpacing:3, lineHeight:1 }}>{rank.title}</div>
+        <div style={{ fontFamily:"'DM Sans'", fontSize:13, color:rank.color, marginTop:8, letterSpacing:2 }}>{rank.sub}</div>
+      </div>
+      {["天","代","横","浜"].map((k,i)=>(<div key={k} style={{ position:"absolute", fontFamily:"'Bebas Neue'", fontSize:28, color:rank.color, opacity:0.2, animation:`kanjiDrop 0.5s ease ${0.3+i*0.15}s both`, top:i<2?20:"auto", bottom:i>=2?20:"auto", left:i%2===0?20:"auto", right:i%2===1?20:"auto" }}>{k}</div>))}
+      <div style={{ position:"absolute", bottom:40, fontSize:11, color:"#333", letterSpacing:2 }}>TAP TO CONTINUE</div>
     </div>
   );
 }
@@ -881,17 +986,31 @@ function MainApp({ user }) {
   const [sessions,setSessions]=useState(()=>lsGet('im_sessions',[]));
   const [bodyMetrics,setBodyMetrics]=useState(()=>lsGet('im_bodyMetrics',[]));
   const [sleepLog,setSleepLog]=useState(()=>lsGet('im_sleepLog',[]));
+  const [customWorkouts,setCustomWorkouts]=useState(()=>lsGet('im_customWorkouts',[]));
+  const [progressPhotos,setProgressPhotos]=useState(()=>lsGet('im_progressPhotos',[]));
+  const [waterLog,setWaterLog]=useState(()=>{
+    const saved=lsGet('im_waterLog',null);
+    const today=new Date().toDateString();
+    return (saved&&saved.date===today) ? saved : { cups:0, date:today, target:8 };
+  });
   const [mealPlan,setMealPlan]=useState(null);
   const [generatingPlan,setGeneratingPlan]=useState(false);
   const [healthSub,setHealthSub]=useState("metrics");
   const [goals,setGoals]=useState(()=>lsGet('oja_goals', DEFAULT_GOALS));
   const [showSettings,setShowSettings]=useState(false);
+  const [rankNotif,setRankNotif]=useState(null);
+  const [prevScore,setPrevScore]=useState(()=>lsGet('im_prevScore',0));
   const [activeSession,setActiveSession]=useState(null);
+  const [saveWorkoutName,setSaveWorkoutName]=useState("");
+  const [showSaveWorkout,setShowSaveWorkout]=useState(false);
+  const [editingFood,setEditingFood]=useState(null);
   const [newExName,setNewExName]=useState("");
   const [newWeight,setNewWeight]=useState("");
   const [newSleep,setNewSleep]=useState({ hours:"", quality:3, soreness:3 });
-  const [planPrefs,setPlanPrefs]=useState({ restrictions:"" });
+  const [planPrefs,setPlanPrefs]=useState({ restrictions:"", dietType:"None" });
   const [showAddFood,setShowAddFood]=useState(false);
+  const [progressPhotoFile,setProgressPhotoFile]=useState(null);
+  const progressPhotoRef=useRef();
 
   const today=new Date().toLocaleDateString("en-US",{ weekday:"short", month:"short", day:"numeric" });
   const totals=foodLog.reduce((a,f)=>({ calories:a.calories+(f.calories||0), protein:a.protein+(f.protein||0), carbs:a.carbs+(f.carbs||0), fat:a.fat+(f.fat||0) }),{ calories:0, protein:0, carbs:0, fat:0 });
@@ -911,6 +1030,44 @@ function MainApp({ user }) {
   useEffect(()=>lsSet('oja_goals', goals),[goals]);
   // Persist all logs
   useEffect(()=>lsSet('im_foodLog', foodLog),[foodLog]);
+  useEffect(()=>lsSet('im_favorites', favorites),[favorites]);
+  useEffect(()=>lsSet('im_sessions', sessions),[sessions]);
+  useEffect(()=>lsSet('im_bodyMetrics', bodyMetrics),[bodyMetrics]);
+  useEffect(()=>lsSet('im_sleepLog', sleepLog),[sleepLog]);
+  useEffect(()=>lsSet('im_customWorkouts', customWorkouts),[customWorkouts]);
+  useEffect(()=>lsSet('im_progressPhotos', progressPhotos),[progressPhotos]);
+  useEffect(()=>lsSet('im_waterLog', waterLog),[waterLog]);
+  useEffect(()=>lsSet('im_prevScore', prevScore),[prevScore]);
+
+  // Rank up detection
+  useEffect(()=>{
+    const newRank=getRank(activityScore);
+    const oldRank=getRank(prevScore);
+    if(activityScore>prevScore && newRank.min>oldRank.min){
+      setRankNotif(newRank);
+    }
+    setPrevScore(activityScore);
+  },[activityScore]);
+
+  // Reset water daily
+  useEffect(()=>{
+    const today=new Date().toDateString();
+    if(waterLog.date!==today) setWaterLog({ cups:0, date:today, target:8 });
+  },[]);
+
+  // Weekly summary
+  const weeklyStats = (() => {
+    const weekAgo=Date.now()-7*24*60*60*1000;
+    const wFoods=foodLog.filter(f=>f.id>=weekAgo);
+    const wSessions=sessions.filter(s=>s.id>=weekAgo);
+    const wSleep=sleepLog.filter(s=>s.id>=weekAgo);
+    const wMetrics=bodyMetrics.filter(m=>m.id>=weekAgo);
+    const days=new Set(wFoods.map(f=>new Date(f.id).toDateString())).size||1;
+    const avgCals=wFoods.length?Math.round(wFoods.reduce((a,f)=>a+(f.calories||0),0)/days):0;
+    const avgSleep=wSleep.length?(wSleep.reduce((a,s)=>a+parseFloat(s.hours||0),0)/wSleep.length).toFixed(1):null;
+    const weightChange=wMetrics.length>=2?(parseFloat(wMetrics[wMetrics.length-1].weight)-parseFloat(wMetrics[0].weight)).toFixed(1):null;
+    return { avgCals, workouts:wSessions.length, avgSleep, weightChange };
+  })();
 
   // Streak calculation — consecutive days with at least 1 food logged
   const streak = (() => {
@@ -932,12 +1089,19 @@ function MainApp({ user }) {
   useEffect(()=>lsSet('im_bodyMetrics', bodyMetrics),[bodyMetrics]);
   useEffect(()=>lsSet('im_sleepLog', sleepLog),[sleepLog]);
 
-  const addFoodItem = (item) => {
-    setFoodLog(p=>[...p, item]);
+  const addFoodItem = (item) => { setFoodLog(p=>[...p, item]); };
+  const deleteFoodItem = (id) => { setFoodLog(p=>p.filter(f=>f.id!==id)); };
+  const editFoodItem = (id, changes) => { setFoodLog(p=>p.map(f=>f.id===id?{...f,...changes}:f)); };
+  const addWater = () => setWaterLog(w=>({...w, cups:Math.min(w.cups+1, 20)}));
+  const removeWater = () => setWaterLog(w=>({...w, cups:Math.max(0, w.cups-1)}));
+  const saveCurrentWorkout = (name) => {
+    if(!activeSession||!name.trim()) return;
+    const workout={ id:Date.now(), name:name.trim(), exercises:activeSession.exercises.map(e=>e.name) };
+    setCustomWorkouts(p=>[...p.filter(w=>w.name!==name.trim()), workout]);
   };
-
-  const deleteFoodItem = (id) => {
-    setFoodLog(p=>p.filter(f=>f.id!==id));
+  const addProgressPhoto = (base64) => {
+    const entry={ id:Date.now(), date:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}), base64, weight:bodyMetrics[bodyMetrics.length-1]?.weight||"" };
+    setProgressPhotos(p=>[...p, entry]);
   };
 
   const toggleFavorite = (food) => {
@@ -951,7 +1115,7 @@ function MainApp({ user }) {
     try {
       const res=await fetch("/api/claude",{ method:"POST", headers:{"Content-Type":"application/json"},
         body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1500,
-          messages:[{ role:"user", content:`Create a 7-day meal plan. Goal: ${user.goal}. Daily calories: ${goals.calories}. Restrictions: ${planPrefs.restrictions||"none"}.
+          messages:[{ role:"user", content:`Create a 7-day meal plan. Goal: ${user.goal}. Daily calories: ${goals.calories}. Diet: ${planPrefs.dietType==="None"?"Standard / no restrictions":planPrefs.dietType==="Custom"?planPrefs.restrictions:planPrefs.dietType}.
 Respond ONLY with valid JSON (no markdown): {"days":[{"day":"Monday","meals":[{"name":"meal name","calories":number,"protein":number,"carbs":number,"fat":number,"time":"Breakfast"}]}]}
 Include Breakfast, Lunch, Dinner, Snack for each day.` }]
         })
@@ -1026,6 +1190,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
     <div style={S.app}>
       {showAddFood && <AddFoodPanel onAdd={addFoodItem} onClose={()=>setShowAddFood(false)} favorites={favorites} recentFoods={recentFoods}/>}
       {showSettings && <SettingsPanel user={user} goals={goals} onSaveGoals={(g)=>{ setGoals(g); setShowSettings(false); }} onClose={()=>setShowSettings(false)}/>}
+      {rankNotif && <RankUpCelebration rank={rankNotif} onDone={()=>setRankNotif(null)}/>}
 
       <div style={S.header}>
         <div style={S.headerTop}>
@@ -1111,6 +1276,50 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <button style={{ ...S.btn, flex:1 }} onClick={openLogFood}>🍱 Log Food</button>
             <button style={{ ...S.btnBlack, flex:1 }} onClick={()=>setTab("workout")}>🏋️ Workout</button>
           </div>
+
+          {/* ── WATER TRACKER ── */}
+          <div style={S.card}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <div style={S.labelRed} >💧 Water Today</div>
+              <span style={{ fontSize:11, color:MUTED }}>{waterLog.cups}/{waterLog.target} cups</span>
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+              {Array.from({length:waterLog.target}).map((_,i)=>(
+                <div key={i} style={{ width:28, height:28, background:i<waterLog.cups?RED+"22":"transparent", border:`1.5px solid ${i<waterLog.cups?RED:BORDER}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>
+                  {i<waterLog.cups?"💧":"○"}
+                </div>
+              ))}
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={addWater} style={{ flex:1, background:RED, color:WHITE, border:"none", padding:"10px", fontFamily:"'Bebas Neue'", fontSize:14, letterSpacing:1, cursor:"pointer" }}>+ Cup</button>
+              <button onClick={removeWater} style={{ background:CARD2, color:TEXT, border:`1px solid ${BORDER}`, padding:"10px 16px", fontFamily:"'Bebas Neue'", fontSize:14, cursor:"pointer" }}>−</button>
+              <button onClick={()=>setWaterLog(w=>({...w,target:Math.min(16,w.target+1)}))} style={{ background:CARD2, color:MUTED, border:`1px solid ${BORDER}`, padding:"10px 12px", fontSize:11, fontFamily:"'DM Sans'", cursor:"pointer" }}>Goal+</button>
+            </div>
+          </div>
+
+          {/* ── WEEKLY SUMMARY ── */}
+          {(weeklyStats.avgCals>0||weeklyStats.workouts>0) && <div style={S.card}>
+            <div style={S.label}>This Week</div>
+            <div style={{ display:"flex", gap:8 }}>
+              <div style={{ flex:1, textAlign:"center", background:CARD2, padding:"10px 6px" }}>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:26, color:RED }}>{weeklyStats.avgCals||"—"}</div>
+                <div style={{ fontSize:9, color:MUTED, letterSpacing:1 }}>AVG KCAL</div>
+              </div>
+              <div style={{ flex:1, textAlign:"center", background:CARD2, padding:"10px 6px" }}>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:26, color:TEXT }}>{weeklyStats.workouts}</div>
+                <div style={{ fontSize:9, color:MUTED, letterSpacing:1 }}>WORKOUTS</div>
+              </div>
+              <div style={{ flex:1, textAlign:"center", background:CARD2, padding:"10px 6px" }}>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:26, color:TEXT }}>{weeklyStats.avgSleep||"—"}</div>
+                <div style={{ fontSize:9, color:MUTED, letterSpacing:1 }}>AVG SLEEP</div>
+              </div>
+              <div style={{ flex:1, textAlign:"center", background:CARD2, padding:"10px 6px" }}>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:26, color:weeklyStats.weightChange<0?RED:TEXT }}>{weeklyStats.weightChange!==null?(weeklyStats.weightChange>0?"+":"")+weeklyStats.weightChange:"—"}</div>
+                <div style={{ fontSize:9, color:MUTED, letterSpacing:1 }}>LBS CHANGE</div>
+              </div>
+            </div>
+          </div>}
+
           <div style={{ display:"flex", gap:10, marginBottom:10 }}>
             <button style={{ ...S.btnSm, flex:1, padding:"9px 4px", textAlign:"center", fontSize:11, letterSpacing:0.5 }} onClick={()=>{ setTab("health"); setHealthSub("sleep"); }}>😴 Log Sleep</button>
             <button style={{ ...S.btnSm, flex:1, padding:"9px 4px", textAlign:"center", fontSize:11, letterSpacing:0.5 }} onClick={()=>{ setTab("health"); setHealthSub("metrics"); }}>⚖️ Log Weight</button>
@@ -1223,6 +1432,21 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               <div style={{ color:RED, fontSize:22, fontWeight:700 }}>›</div>
             </div>
           ))}
+          {customWorkouts.length>0&&<>
+            <div style={S.label}>My Saved Workouts</div>
+            {customWorkouts.map(w=>(
+              <div key={w.id} style={{ ...S.card, cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div onClick={()=>startWorkout(w)} style={{ flex:1 }}>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:17, letterSpacing:1 }}>{w.name}</div>
+                  <div style={{ fontSize:11, color:MUTED, marginTop:3 }}>{w.exercises.join(" · ")}</div>
+                </div>
+                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                  <div onClick={()=>startWorkout(w)} style={{ color:RED, fontSize:22, fontWeight:700, cursor:"pointer" }}>›</div>
+                  <button onClick={()=>setCustomWorkouts(p=>p.filter(x=>x.id!==w.id))} style={{ background:"transparent", border:`1px solid ${BORDER}`, color:MUTED, fontSize:11, padding:"3px 7px", cursor:"pointer" }}>✕</button>
+                </div>
+              </div>
+            ))}
+          </>}
           <button style={{ ...S.btnBlack, marginTop:4 }} onClick={()=>startWorkout({ name:"Custom Workout", exercises:[] })}>+ Custom Workout</button>
         </>)}
 
@@ -1253,6 +1477,14 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <input style={{ ...S.input, flex:1 }} placeholder="Add exercise..." value={newExName} onChange={e=>setNewExName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCustomEx()}/>
             <button style={S.btnSmRed} onClick={addCustomEx}>Add</button>
           </div>
+          {showSaveWorkout
+            ? <div style={{ ...S.card, display:"flex", gap:8 }}>
+                <input style={{ ...S.input, flex:1 }} placeholder="Name this workout..." value={saveWorkoutName} onChange={e=>setSaveWorkoutName(e.target.value)} autoFocus/>
+                <button style={S.btnSmRed} onClick={()=>{ saveCurrentWorkout(saveWorkoutName); setSaveWorkoutName(""); setShowSaveWorkout(false); }}>Save</button>
+                <button style={S.btnSm} onClick={()=>setShowSaveWorkout(false)}>✕</button>
+              </div>
+            : <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>setShowSaveWorkout(true)}>💾 Save as Template</button>
+          }
           <button style={S.btn} onClick={finishWorkout}>✓ Finish Workout</button>
         </>)}
 
@@ -1260,7 +1492,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
         {tab==="health"&&(<>
           <div style={{ fontFamily:"'Bebas Neue'", fontSize:24, letterSpacing:2, marginBottom:12 }}>Health Center</div>
           <div style={{ display:"flex", marginBottom:14, borderBottom:`2px solid ${BORDER}` }}>
-            {[{ id:"metrics", label:"⚖️ Body" },{ id:"sleep", label:"😴 Sleep" },{ id:"ai", label:"🤖 AI Plan" }].map(t=>(
+            {[{ id:"metrics", label:"⚖️ Body" },{ id:"sleep", label:"😴 Sleep" },{ id:"photos", label:"📸 Photos" },{ id:"ai", label:"🤖 AI Plan" }].map(t=>(
               <button key={t.id} style={S.subTab(healthSub===t.id)} onClick={()=>setHealthSub(t.id)}>{t.label}</button>
             ))}
           </div>
@@ -1334,13 +1566,58 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             </div>}
           </>)}
 
+          {healthSub==="photos"&&(<>
+            <div style={S.card}>
+              <div style={S.labelRed}>📸 Progress Photos</div>
+              <div style={{ fontSize:12, color:MUTED, marginBottom:12, lineHeight:1.6 }}>Log a weekly photo to track your visual progress alongside your weight.</div>
+              <input ref={progressPhotoRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }}
+                onChange={e=>{ const file=e.target.files[0]; if(!file) return; const r=new FileReader(); r.onload=ev=>{ addProgressPhoto(ev.target.result.split(",")[1]); }; r.readAsDataURL(file); }}/>
+              <div style={{ display:"flex", gap:8 }}>
+                <button style={{ ...S.btn, flex:1 }} onClick={()=>progressPhotoRef.current?.click()}>📷 Take Photo</button>
+              </div>
+            </div>
+            {progressPhotos.length===0
+              ? <div style={{ ...S.card, textAlign:"center", padding:"36px 20px" }}>
+                  <div style={{ fontSize:34, marginBottom:10 }}>📸</div>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:17, letterSpacing:1, marginBottom:6 }}>No photos yet</div>
+                  <div style={{ fontSize:12, color:MUTED }}>Take a weekly photo to track your visual transformation</div>
+                </div>
+              : <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  {[...progressPhotos].reverse().map(p=>(
+                    <div key={p.id} style={{ position:"relative" }}>
+                      <img src={`data:image/jpeg;base64,${p.base64}`} alt="Progress" style={{ width:"100%", aspectRatio:"1", objectFit:"cover", display:"block" }}/>
+                      <div style={{ background:"rgba(0,0,0,0.7)", padding:"4px 8px", fontSize:10, color:WHITE, position:"absolute", bottom:0, left:0, right:0 }}>
+                        {p.date}{p.weight?` · ${p.weight} lbs`:""}
+                      </div>
+                      <button onClick={()=>setProgressPhotos(p2=>p2.filter(x=>x.id!==p.id))} style={{ position:"absolute", top:4, right:4, background:"rgba(0,0,0,0.7)", border:"none", color:WHITE, width:22, height:22, cursor:"pointer", fontSize:12 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+            }
+          </>)}
+
           {healthSub==="ai"&&(<>
             <div style={S.card}>
               <div style={S.labelRed}>AI Meal Planner</div>
-              <div style={{ fontSize:12, color:MUTED, marginBottom:14, lineHeight:1.6 }}>Claude builds a personalised 7-day meal plan based on your goal and calorie target.</div>
+              <div style={{ fontSize:12, color:MUTED, marginBottom:14, lineHeight:1.6 }}>Claude builds a personalised 7-day meal plan based on your goal and diet.</div>
               <div style={{ marginBottom:12 }}>
-                <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:6 }}>DIETARY RESTRICTIONS / PREFERENCES</div>
-                <input style={S.input} placeholder="e.g. no dairy, vegetarian, gluten-free..." value={planPrefs.restrictions} onChange={e=>setPlanPrefs(p=>({ ...p, restrictions:e.target.value }))}/>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:6 }}>DIET TYPE</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:8 }}>
+                  {DIET_OPTIONS.filter(d=>d!=="Custom").map(d=>(
+                    <button key={d} onClick={()=>setPlanPrefs(p=>({...p, dietType:d, restrictions:d==="None"?"":d}))}
+                      style={{ padding:"6px 12px", fontFamily:"'DM Sans'", fontSize:12, background:planPrefs.dietType===d?RED:CARD2, color:planPrefs.dietType===d?WHITE:TEXT, border:`1px solid ${planPrefs.dietType===d?RED:BORDER}`, cursor:"pointer", borderRadius:0 }}>
+                      {d}
+                    </button>
+                  ))}
+                  <button onClick={()=>setPlanPrefs(p=>({...p, dietType:"Custom"}))}
+                    style={{ padding:"6px 12px", fontFamily:"'DM Sans'", fontSize:12, background:planPrefs.dietType==="Custom"?RED:CARD2, color:planPrefs.dietType==="Custom"?WHITE:TEXT, border:`1px solid ${planPrefs.dietType==="Custom"?RED:BORDER}`, cursor:"pointer" }}>
+                    Custom ✏️
+                  </button>
+                </div>
+                {planPrefs.dietType==="Custom"&&(
+                  <input style={S.input} placeholder="e.g. no dairy, high protein, intermittent fasting..." value={planPrefs.restrictions}
+                    onChange={e=>setPlanPrefs(p=>({...p, restrictions:e.target.value}))}/>
+                )}
               </div>
               <div style={{ ...S.card2, marginBottom:10, display:"flex", justifyContent:"space-between" }}>
                 <span style={{ fontSize:12, color:MUTED }}>Goal</span><span style={{ fontSize:12, fontWeight:600 }}>{goalLabel[user.goal]}</span>
