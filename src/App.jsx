@@ -262,7 +262,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
     if (!query.trim()) return;
     setLoading(true); setError(""); setResult(null); setOptions([]);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"},
+      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1200,
           messages:[{ role:"user", content:`Give 4 to 6 distinct variations of: "${query}". Vary by size, preparation method, fat content, cut of meat, cooking style, or restaurant vs homemade — whatever makes the most sense for this food. Each option should be meaningfully different so the user can pick the right one. Respond ONLY with valid JSON (no markdown): {"options":[{"name":"specific descriptive name","calories":number,"protein":number,"carbs":number,"fat":number,"fiber":number,"sugar":number,"serving":"serving size description","confidence":"high/medium/low","notes":"1 sentence on what makes this variation distinct"}]}` }]
         })
@@ -309,7 +309,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
     if (!imgBase64) return;
     setLoading(true); setError(""); setResult(null);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"},
+      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:800,
           messages:[{ role:"user", content:[
             { type:"image", source:{ type:"base64", media_type:"image/jpeg", data:imgBase64 }},
@@ -492,7 +492,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
                 : <><div style={{ fontSize:34, marginBottom:8 }}>📷</div><div style={{ fontFamily:"'Bebas Neue'", fontSize:16, letterSpacing:1, marginBottom:4 }}>Tap to Upload Photo</div><div style={{ fontSize:12, color:MUTED }}>Claude AI will analyze the nutrition facts</div></>
               }
             </div>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>handleFile(e.target.files[0])}/>
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={e=>handleFile(e.target.files[0])}/>
             {imgPreview && !result && (
               <div style={{ display:"flex", gap:8, marginBottom:12 }}>
                 <button style={S.btn} onClick={analyzePhoto} disabled={loading}>{loading?"⚡ Analyzing...":"⚡ Analyze with AI"}</button>
@@ -530,6 +530,181 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
               <div style={{ fontSize:12, color:MUTED, textAlign:"center", marginTop:8 }}>Supports EAN-13, UPC-A, QR Code and more</div>
             )}
           </>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── SETTINGS PANEL ──────────────────────────────── */
+function SettingsPanel({ user, goals, onSaveGoals, onClose }) {
+  const [g, setG] = useState({ ...goals });
+  const [tdeeMode, setTdeeMode] = useState(false);
+  const [tdee, setTdee] = useState({ weight:"", height:"", age:"", sex:"male", activity:"moderate" });
+  const [tdeeResult, setTdeeResult] = useState(null);
+
+  const activityMultipliers = { sedentary:1.2, light:1.375, moderate:1.55, active:1.725, veryactive:1.9 };
+  const activityLabels = { sedentary:"Sedentary (desk job)", light:"Light (1-3x/week)", moderate:"Moderate (3-5x/week)", active:"Active (6-7x/week)", veryactive:"Very Active (athlete)" };
+
+  const calcTDEE = () => {
+    const wKg = parseFloat(tdee.weight) / 2.205;
+    const hCm = parseFloat(tdee.height) * 2.54;
+    const age  = parseFloat(tdee.age);
+    if (isNaN(wKg)||isNaN(hCm)||isNaN(age)) return;
+    const bmr = tdee.sex==="male"
+      ? 10*wKg + 6.25*hCm - 5*age + 5
+      : 10*wKg + 6.25*hCm - 5*age - 161;
+    const maintenance = Math.round(bmr * activityMultipliers[tdee.activity]);
+    const goal = user.goal;
+    const target = goal==="cut" ? maintenance-500 : goal==="bulk" ? maintenance+300 : maintenance;
+    const protein = Math.round(parseFloat(tdee.weight) * 0.82);
+    const fat     = Math.round(target * 0.25 / 9);
+    const carbs   = Math.round((target - protein*4 - fat*9) / 4);
+    setTdeeResult({ calories:target, maintenance, protein, fat, carbs });
+    setG({ calories:target, protein, fat, carbs });
+  };
+
+  const S = {
+    overlay: { position:"fixed", inset:0, zIndex:600, display:"flex", flexDirection:"column" },
+    backdrop: { flex:1, background:"rgba(0,0,0,0.6)" },
+    panel: { background:BG, maxHeight:"92vh", display:"flex", flexDirection:"column", animation:"slideUp 0.35s cubic-bezier(.22,1,.36,1)" },
+    head: { background:BLACK, padding:"14px 16px 0", flexShrink:0 },
+    body: { overflowY:"auto", padding:"16px 16px 40px", flex:1 },
+    label: { fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:6 },
+    labelRed: { fontFamily:"'Bebas Neue'", fontSize:12, color:RED, letterSpacing:2, marginBottom:10, borderBottom:`1px solid ${RED}44`, paddingBottom:5 },
+    input: { background:WHITE, color:TEXT, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, borderRadius:0, padding:"9px 10px", fontSize:13, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none" },
+    row: { display:"flex", gap:10, marginBottom:14 },
+    card: { background:CARD, border:`1px solid ${BORDER}`, borderLeft:`3px solid ${RED}`, padding:"14px", marginBottom:10 },
+    btn: { background:RED, color:WHITE, border:"none", borderRadius:0, padding:"13px 16px", fontSize:13, fontWeight:600, fontFamily:"'DM Sans'", cursor:"pointer", width:"100%", letterSpacing:1, textTransform:"uppercase" },
+    btnSm: { background:CARD2, color:TEXT, border:`1px solid ${BORDER}`, borderRadius:0, padding:"8px 14px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer", letterSpacing:0.5 },
+    btnSmRed: { background:"transparent", color:RED, border:`1px solid ${RED}`, borderRadius:0, padding:"8px 14px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer", letterSpacing:0.5 },
+    macroInput: { flex:1, display:"flex", flexDirection:"column", gap:5 },
+  };
+
+  return (
+    <div style={S.overlay}>
+      <div style={S.backdrop} onClick={onClose}/>
+      <div style={S.panel}>
+        <div style={S.head}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:22, color:WHITE, letterSpacing:2 }}>SETTINGS</div>
+              <div style={{ fontSize:10, color:"#444", letterSpacing:1 }}>IZANA MODE · {user.name}</div>
+            </div>
+            <button onClick={onClose} style={{ background:"transparent", border:"none", color:"#555", fontSize:20, cursor:"pointer" }}>✕</button>
+          </div>
+        </div>
+
+        <div style={S.body}>
+
+          {/* TDEE Calculator */}
+          <div style={{ marginBottom:6, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={S.labelRed}>🧮 TDEE CALCULATOR</div>
+            <button style={S.btnSm} onClick={()=>setTdeeMode(m=>!m)}>
+              {tdeeMode ? "▲ Hide" : "▼ Calculate"}
+            </button>
+          </div>
+
+          {tdeeMode && (
+            <div style={S.card}>
+              <div style={S.row}>
+                <div style={S.macroInput}>
+                  <div style={S.label}>WEIGHT (lbs)</div>
+                  <input style={S.input} placeholder="185" type="number" value={tdee.weight} onChange={e=>setTdee(t=>({...t,weight:e.target.value}))}/>
+                </div>
+                <div style={S.macroInput}>
+                  <div style={S.label}>HEIGHT (in)</div>
+                  <input style={S.input} placeholder="70" type="number" value={tdee.height} onChange={e=>setTdee(t=>({...t,height:e.target.value}))}/>
+                </div>
+                <div style={S.macroInput}>
+                  <div style={S.label}>AGE</div>
+                  <input style={S.input} placeholder="25" type="number" value={tdee.age} onChange={e=>setTdee(t=>({...t,age:e.target.value}))}/>
+                </div>
+              </div>
+
+              <div style={{ marginBottom:12 }}>
+                <div style={S.label}>BIOLOGICAL SEX</div>
+                <div style={{ display:"flex", gap:8 }}>
+                  {["male","female"].map(s=>(
+                    <button key={s} onClick={()=>setTdee(t=>({...t,sex:s}))} style={{ flex:1, padding:"9px", fontFamily:"'Bebas Neue'", fontSize:14, letterSpacing:1, background:tdee.sex===s?RED:"transparent", color:tdee.sex===s?WHITE:MUTED, border:`1px solid ${tdee.sex===s?RED:BORDER}`, cursor:"pointer", textTransform:"uppercase" }}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom:14 }}>
+                <div style={S.label}>ACTIVITY LEVEL</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  {Object.entries(activityLabels).map(([k,v])=>(
+                    <button key={k} onClick={()=>setTdee(t=>({...t,activity:k}))} style={{ textAlign:"left", padding:"8px 12px", fontFamily:"'DM Sans'", fontSize:12, background:tdee.activity===k?RED+\"18\":\"transparent\", color:tdee.activity===k?RED:MUTED, border:`1px solid ${tdee.activity===k?RED:BORDER}`, cursor:"pointer", borderLeft:tdee.activity===k?`3px solid ${RED}`:`3px solid transparent` }}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button style={S.btn} onClick={calcTDEE}>⚡ Calculate My Targets</button>
+
+              {tdeeResult && (
+                <div style={{ marginTop:14, background:BLACK, padding:"12px 14px" }}>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:"#555", letterSpacing:2, marginBottom:8 }}>YOUR TARGETS — {user.goal?.toUpperCase()||"GOAL"}</div>
+                  <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                    <div style={{ flex:1, textAlign:"center" }}>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:RED }}>{tdeeResult.calories}</div>
+                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>KCAL</div>
+                    </div>
+                    <div style={{ flex:1, textAlign:"center" }}>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:WHITE }}>{tdeeResult.protein}g</div>
+                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>PROTEIN</div>
+                    </div>
+                    <div style={{ flex:1, textAlign:"center" }}>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:MUTED }}>{tdeeResult.carbs}g</div>
+                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>CARBS</div>
+                    </div>
+                    <div style={{ flex:1, textAlign:"center" }}>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:RED_DIM }}>{tdeeResult.fat}g</div>
+                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>FAT</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:10, color:"#555", textAlign:"center" }}>Maintenance: {tdeeResult.maintenance} kcal · targets applied below ↓</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Manual Goals */}
+          <div style={S.labelRed}>🎯 DAILY MACRO TARGETS</div>
+          <div style={S.card}>
+            <div style={{ marginBottom:14 }}>
+              <div style={S.label}>CALORIES (kcal)</div>
+              <input style={S.input} type="number" value={g.calories} onChange={e=>setG(x=>({...x,calories:parseInt(e.target.value)||0}))}/>
+            </div>
+            <div style={S.row}>
+              <div style={S.macroInput}>
+                <div style={S.label}>PROTEIN (g)</div>
+                <input style={S.input} type="number" value={g.protein} onChange={e=>setG(x=>({...x,protein:parseInt(e.target.value)||0}))}/>
+              </div>
+              <div style={S.macroInput}>
+                <div style={S.label}>CARBS (g)</div>
+                <input style={S.input} type="number" value={g.carbs} onChange={e=>setG(x=>({...x,carbs:parseInt(e.target.value)||0}))}/>
+              </div>
+              <div style={S.macroInput}>
+                <div style={S.label}>FAT (g)</div>
+                <input style={S.input} type="number" value={g.fat} onChange={e=>setG(x=>({...x,fat:parseInt(e.target.value)||0}))}/>
+              </div>
+            </div>
+            <div style={{ fontSize:11, color:MUTED, marginBottom:14, padding:"8px 10px", background:CARD2, borderLeft:`2px solid ${BORDER}` }}>
+              Calories from macros: <strong style={{ color:TEXT }}>{g.protein*4 + g.carbs*4 + g.fat*9} kcal</strong>
+            </div>
+            <button style={S.btn} onClick={()=>onSaveGoals(g)}>✓ Save Targets</button>
+          </div>
+
+          {/* App info */}
+          <div style={{ textAlign:"center", padding:"20px 0 0", borderTop:`1px solid ${BORDER}`, marginTop:6 }}>
+            <div style={{ fontFamily:"'Bebas Neue'", fontSize:18, letterSpacing:4, color:MUTED }}>IZANA <span style={{ color:RED }}>MODE</span></div>
+            <div style={{ fontSize:10, color:MUTED, marginTop:4, letterSpacing:1 }}>王者之道 · WAY OF THE SOVEREIGN</div>
+          </div>
         </div>
       </div>
     </div>
@@ -686,7 +861,8 @@ function MainApp({ user }) {
   const [mealPlan,setMealPlan]=useState(null);
   const [generatingPlan,setGeneratingPlan]=useState(false);
   const [healthSub,setHealthSub]=useState("metrics");
-  const [goals]=useState(DEFAULT_GOALS);
+  const [goals,setGoals]=useState(()=>lsGet('oja_goals', DEFAULT_GOALS));
+  const [showSettings,setShowSettings]=useState(false);
   const [activeSession,setActiveSession]=useState(null);
   const [newExName,setNewExName]=useState("");
   const [newWeight,setNewWeight]=useState("");
@@ -708,8 +884,26 @@ function MainApp({ user }) {
     [...foodLog].reverse().map(f => [f.name, f])
   ).values()];
 
-  // Persist to localStorage whenever state changes
+  // Persist goals
+  useEffect(()=>lsSet('oja_goals', goals),[goals]);
+  // Persist all logs
   useEffect(()=>lsSet('im_foodLog', foodLog),[foodLog]);
+
+  // Streak calculation — consecutive days with at least 1 food logged
+  const streak = (() => {
+    if (!foodLog.length) return 0;
+    const logged = new Set(foodLog.map(f => {
+      const d = new Date(f.id); // id is Date.now()
+      return `${d.getMonth()}-${d.getDate()}-${d.getFullYear()}`;
+    }));
+    let count = 0, d = new Date();
+    while (true) {
+      const key = `${d.getMonth()}-${d.getDate()}-${d.getFullYear()}`;
+      if (logged.has(key)) { count++; d.setDate(d.getDate()-1); }
+      else break;
+    }
+    return count;
+  })();
   useEffect(()=>lsSet('im_favorites', favorites),[favorites]);
   useEffect(()=>lsSet('im_sessions', sessions),[sessions]);
   useEffect(()=>lsSet('im_bodyMetrics', bodyMetrics),[bodyMetrics]);
@@ -717,6 +911,10 @@ function MainApp({ user }) {
 
   const addFoodItem = (item) => {
     setFoodLog(p=>[...p, item]);
+  };
+
+  const deleteFoodItem = (id) => {
+    setFoodLog(p=>p.filter(f=>f.id!==id));
   };
 
   const toggleFavorite = (food) => {
@@ -728,7 +926,7 @@ function MainApp({ user }) {
   const generateMealPlan=async()=>{
     setGeneratingPlan(true); setMealPlan(null);
     try {
-      const res=await fetch("https://api.anthropic.com/v1/messages",{ method:"POST", headers:{"Content-Type":"application/json"},
+      const res=await fetch("/api/claude",{ method:"POST", headers:{"Content-Type":"application/json"},
         body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1500,
           messages:[{ role:"user", content:`Create a 7-day meal plan. Goal: ${user.goal}. Daily calories: ${goals.calories}. Restrictions: ${planPrefs.restrictions||"none"}.
 Respond ONLY with valid JSON (no markdown): {"days":[{"day":"Monday","meals":[{"name":"meal name","calories":number,"protein":number,"carbs":number,"fat":number,"time":"Breakfast"}]}]}
@@ -804,6 +1002,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
   return (
     <div style={S.app}>
       {showAddFood && <AddFoodPanel onAdd={addFoodItem} onClose={()=>setShowAddFood(false)} favorites={favorites} recentFoods={recentFoods}/>}
+      {showSettings && <SettingsPanel user={user} goals={goals} onSaveGoals={(g)=>{ setGoals(g); setShowSettings(false); }} onClose={()=>setShowSettings(false)}/>}
 
       <div style={S.header}>
         <div style={S.headerTop}>
@@ -814,10 +1013,15 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               <div style={S.subhead}>{user.name.toUpperCase()} · {goalLabel[user.goal]} · {today}</div>
             </div>
           </div>
-          <div style={{ textAlign:"right" }}>
-            <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:rank.color, letterSpacing:2 }}>{rank.title}</div>
-            <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:RED, lineHeight:1 }}>{Math.round(totals.calories)}</div>
-            <div style={{ fontSize:9, color:"#555", letterSpacing:1, textTransform:"uppercase" }}>kcal today</div>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:rank.color, letterSpacing:2 }}>{rank.title}</div>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:RED, lineHeight:1 }}>{Math.round(totals.calories)}</div>
+              <div style={{ fontSize:9, color:"#555", letterSpacing:1, textTransform:"uppercase" }}>kcal today</div>
+            </div>
+            <button onClick={()=>setShowSettings(true)} style={{ background:"transparent", border:`1px solid #333`, color:"#555", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="#888" strokeWidth="1.8"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="#888" strokeWidth="1.8"/></svg>
+            </button>
           </div>
         </div>
         <div style={{ height:3, background:`linear-gradient(90deg,${RED},${BLACK})` }}/>
@@ -843,12 +1047,27 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             </div>
           </div>
 
+          <div style={{ display:"flex", gap:10, marginBottom:10 }}>
+            {/* Streak card */}
+            <div style={{ ...S.card, flex:1, marginBottom:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"12px 8px", textAlign:"center" }}>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:36, color:streak>0?RED:MUTED, lineHeight:1 }}>{streak}</div>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:10, color:MUTED, letterSpacing:2, marginTop:2 }}>DAY{streak!==1?"S":""} STREAK</div>
+              <div style={{ fontSize:10, color:streak>=7?RED:MUTED, marginTop:4 }}>{streak===0?"Log today to start":streak>=7?"🔥 On fire!":streak>=3?"Keep going!":"Keep it up!"}</div>
+            </div>
+            {/* Activity score card */}
+            <div style={{ ...S.card, flex:1, marginBottom:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"12px 8px", textAlign:"center" }}>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:36, color:TEXT, lineHeight:1 }}>{activityScore}</div>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:10, color:MUTED, letterSpacing:2, marginTop:2 }}>TOTAL LOGS</div>
+              <div style={{ fontSize:10, color:MUTED, marginTop:4 }}>{foodLog.length}f · {sessions.length}w · {sleepLog.length}s</div>
+            </div>
+          </div>
+
           <div style={S.card}>
             <div style={S.labelRed}>Daily Calories</div>
             <div style={{ display:"flex", alignItems:"center", gap:20 }}>
               <Ring value={totals.calories} max={goals.calories} size={86} stroke={9} color={RED}/>
               <div style={{ flex:1 }}>
-                <div style={S.bigNum}>{Math.round(goals.calories-totals.calories)}</div>
+                <div style={S.bigNum}>{Math.round(Math.max(0, goals.calories-totals.calories))}</div>
                 <div style={{ fontSize:12, color:MUTED }}>kcal remaining</div>
                 {recoveryScore!==null&&<div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6 }}>
                   <div style={{ width:8, height:8, background:recoveryScore>70?RED:MUTED }}/>
@@ -948,6 +1167,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                         {favorites.find(x=>x.name===f.name)?"★":"☆"}
                       </button>
                       <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:RED }}>{Math.round(f.calories)}</div>
+                      <button onClick={()=>deleteFoodItem(f.id)} style={{ background:"transparent", border:`1px solid ${BORDER}`, cursor:"pointer", color:MUTED, fontSize:12, lineHeight:1, padding:"3px 7px", letterSpacing:0.3 }} title="Remove">✕</button>
                     </div>
                   </div>
                   <div style={{ display:"flex", gap:6 }}>
@@ -1176,7 +1396,7 @@ function WelcomeBack({ user, onContinue }) {
           {user.name.toUpperCase()}
         </div>
         <div style={{ fontFamily:"'DM Sans'", fontSize:13, color:"#555", marginTop:10, letterSpacing:1, animation:"fadeUp 0.6s ease 0.6s both" }}>
-          {goalLabel[user.goal]} · Ready to train?
+          {goalLabel[user.goal]} · Tenjiku awaits
         </div>
       </div>
 
