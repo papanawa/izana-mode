@@ -27,6 +27,19 @@ const getRank = (s) => [...RANKS].reverse().find(r => s >= r.min) || RANKS[0];
 
 const DIET_OPTIONS = ["None","Carnivore","Keto","Paleo","Mediterranean","Vegan","Vegetarian","Pescatarian","Gluten-Free","Dairy-Free","Custom"];
 
+const DIET_MACROS = {
+  "None":          { protein:0.30, carbs:0.40, fat:0.30 },
+  "Carnivore":     { protein:0.40, carbs:0.00, fat:0.60 },
+  "Keto":          { protein:0.25, carbs:0.05, fat:0.70 },
+  "Paleo":         { protein:0.30, carbs:0.35, fat:0.35 },
+  "Mediterranean": { protein:0.20, carbs:0.45, fat:0.35 },
+  "Vegan":         { protein:0.20, carbs:0.55, fat:0.25 },
+  "Vegetarian":    { protein:0.20, carbs:0.50, fat:0.30 },
+  "Pescatarian":   { protein:0.25, carbs:0.45, fat:0.30 },
+  "Gluten-Free":   { protein:0.25, carbs:0.45, fat:0.30 },
+  "Dairy-Free":    { protein:0.25, carbs:0.45, fat:0.30 },
+};
+
 const ACTIVITY_LEVELS = {
   sedentary:  { label:"Sedentary — desk job, no exercise",      mult:1.2   },
   light:      { label:"Light — 1-3 workouts/week",              mult:1.375 },
@@ -607,11 +620,16 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
 }
 
 /* ── SETTINGS PANEL ──────────────────────────────── */
-function SettingsPanel({ user, goals, onSaveGoals, onClose }) {
-  const [g, setG] = useState({ ...goals });
+function SettingsPanel({ user, profiles, onSaveProfiles, onClose }) {
+  const activeProfile  = profiles.find(p=>p.isActive) || profiles[0];
+  const [editing, setEditing]   = useState(activeProfile?.id || null);
+  const [showNew, setShowNew]   = useState(false);
+  const [newName, setNewName]   = useState("");
+  const [g, setG]               = useState({ ...activeProfile });
   const [tdeeMode, setTdeeMode] = useState(false);
-  const [tdee, setTdee] = useState({ weight:"", height:"", age:"", sex:"male", activity:"moderate" });
+  const [tdee, setTdee]         = useState({ weight:"", height:"", age:"", sex:"male", activity:"moderate" });
   const [tdeeResult, setTdeeResult] = useState(null);
+  const [dietSuggest, setDietSuggest] = useState(null); // { diet, calories, protein, carbs, fat }
 
   const activityMultipliers = { sedentary:1.2, light:1.375, moderate:1.55, active:1.725, veryactive:1.9 };
   const activityLabels = { sedentary:"Sedentary (desk job)", light:"Light (1-3x/week)", moderate:"Moderate (3-5x/week)", active:"Active (6-7x/week)", veryactive:"Very Active (athlete)" };
@@ -621,42 +639,76 @@ function SettingsPanel({ user, goals, onSaveGoals, onClose }) {
     const hCm = parseFloat(tdee.height) * 2.54;
     const age  = parseFloat(tdee.age);
     if (isNaN(wKg)||isNaN(hCm)||isNaN(age)) return;
-    const bmr = tdee.sex==="male"
-      ? 10*wKg + 6.25*hCm - 5*age + 5
-      : 10*wKg + 6.25*hCm - 5*age - 161;
-    const maintenance = Math.round(bmr * activityMultipliers[tdee.activity]);
-    const goal = user.goal;
-    const target = goal==="cut" ? maintenance-500 : goal==="bulk" ? maintenance+300 : maintenance;
-    const protein = Math.round(parseFloat(tdee.weight) * 0.82);
-    const fat     = Math.round(target * 0.25 / 9);
-    const carbs   = Math.round((target - protein*4 - fat*9) / 4);
-    setTdeeResult({ calories:target, maintenance, protein, fat, carbs });
-    setG({ calories:target, protein, fat, carbs });
+    const bmr = tdee.sex==="male" ? 10*wKg+6.25*hCm-5*age+5 : 10*wKg+6.25*hCm-5*age-161;
+    const maint = Math.round(bmr * activityMultipliers[tdee.activity]);
+    const target = user.goal==="cut"?maint-500:user.goal==="bulk"?maint+300:maint;
+    const protein = Math.round(parseFloat(tdee.weight)*0.82);
+    const fat     = Math.round(target*0.25/9);
+    const carbs   = Math.max(0, Math.round((target-protein*4-fat*9)/4));
+    setTdeeResult({ calories:target, maintenance:maint, protein, fat, carbs });
+    setG(x=>({ ...x, calories:target, protein, fat, carbs }));
+  };
+
+  const suggestDietMacros = (diet) => {
+    if (!DIET_MACROS[diet]) return;
+    const cal = g.calories || activeProfile.calories;
+    const pct = DIET_MACROS[diet];
+    const protein = Math.round((cal * pct.protein) / 4);
+    const carbs   = Math.round((cal * pct.carbs)   / 4);
+    const fat     = Math.round((cal * pct.fat)     / 9);
+    setDietSuggest({ diet, calories:cal, protein, carbs, fat });
+  };
+
+  const applyToActive = (macros) => {
+    onSaveProfiles(profiles.map(p => p.isActive ? { ...p, ...macros } : p));
+    setG(x=>({ ...x, ...macros }));
+    setDietSuggest(null);
+  };
+
+  const saveAsNewProfile = (macros, name) => {
+    const newProfile = { id:Date.now(), name: name||`${macros.diet||"Custom"} Profile`, ...macros, isActive:false };
+    onSaveProfiles([...profiles, newProfile]);
+    setDietSuggest(null);
+  };
+
+  const setActive = (id) => onSaveProfiles(profiles.map(p=>({...p, isActive:p.id===id})));
+  const deleteProfile = (id) => { if(profiles.length<=1) return; onSaveProfiles(profiles.filter(p=>p.id!==id)); };
+  const saveEditing = () => onSaveProfiles(profiles.map(p=>p.id===g.id?{...p,...g}:p));
+  const createProfile = () => {
+    if(!newName.trim()) return;
+    const base = { ...activeProfile };
+    const newP = { id:Date.now(), name:newName.trim(), calories:base.calories, protein:base.protein, carbs:base.carbs, fat:base.fat, isActive:false };
+    onSaveProfiles([...profiles, newP]);
+    setNewName(""); setShowNew(false);
+    setEditing(newP.id); setG(newP);
   };
 
   const S = {
-    overlay: { position:"fixed", inset:0, zIndex:600, display:"flex", flexDirection:"column" },
-    backdrop: { flex:1, background:"rgba(0,0,0,0.6)" },
-    panel: { background:BG, maxHeight:"92vh", display:"flex", flexDirection:"column", animation:"slideUp 0.35s cubic-bezier(.22,1,.36,1)" },
-    head: { background:BLACK, padding:"14px 16px 0", flexShrink:0 },
-    body: { overflowY:"auto", padding:"16px 16px 40px", flex:1 },
-    label: { fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:6 },
-    labelRed: { fontFamily:"'Bebas Neue'", fontSize:12, color:RED, letterSpacing:2, marginBottom:10, borderBottom:`1px solid ${RED}44`, paddingBottom:5 },
-    input: { background:WHITE, color:TEXT, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, borderRadius:0, padding:"9px 10px", fontSize:13, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none" },
-    row: { display:"flex", gap:10, marginBottom:14 },
-    card: { background:CARD, border:`1px solid ${BORDER}`, borderLeft:`3px solid ${RED}`, padding:"14px", marginBottom:10 },
-    btn: { background:RED, color:WHITE, border:"none", borderRadius:0, padding:"13px 16px", fontSize:13, fontWeight:600, fontFamily:"'DM Sans'", cursor:"pointer", width:"100%", letterSpacing:1, textTransform:"uppercase" },
-    btnSm: { background:CARD2, color:TEXT, border:`1px solid ${BORDER}`, borderRadius:0, padding:"8px 14px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer", letterSpacing:0.5 },
-    btnSmRed: { background:"transparent", color:RED, border:`1px solid ${RED}`, borderRadius:0, padding:"8px 14px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer", letterSpacing:0.5 },
-    macroInput: { flex:1, display:"flex", flexDirection:"column", gap:5 },
+    overlay:   { position:"fixed", inset:0, zIndex:600, display:"flex", flexDirection:"column" },
+    backdrop:  { flex:1, background:"rgba(0,0,0,0.6)" },
+    panel:     { background:BG, maxHeight:"92vh", display:"flex", flexDirection:"column", animation:"slideUp 0.35s cubic-bezier(.22,1,.36,1)" },
+    head:      { background:BLACK, padding:"14px 16px 14px", flexShrink:0 },
+    body:      { overflowY:"auto", padding:"16px 16px 40px", flex:1 },
+    label:     { fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:6 },
+    labelRed:  { fontFamily:"'Bebas Neue'", fontSize:12, color:RED, letterSpacing:2, marginBottom:10, borderBottom:`1px solid ${RED}44`, paddingBottom:5 },
+    input:     { background:WHITE, color:TEXT, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, borderRadius:0, padding:"9px 10px", fontSize:13, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none" },
+    row:       { display:"flex", gap:10, marginBottom:14 },
+    card:      { background:CARD, border:`1px solid ${BORDER}`, borderLeft:`3px solid ${RED}`, padding:"14px", marginBottom:10 },
+    cardBlack: { background:BLACK, border:`1px solid #333`, borderLeft:`3px solid ${RED}`, padding:"12px 14px", marginBottom:10 },
+    btn:       { background:RED, color:WHITE, border:"none", borderRadius:0, padding:"13px 16px", fontSize:13, fontWeight:600, fontFamily:"'DM Sans'", cursor:"pointer", width:"100%", letterSpacing:1, textTransform:"uppercase" },
+    btnSm:     { background:CARD2, color:TEXT, border:`1px solid ${BORDER}`, borderRadius:0, padding:"7px 12px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer" },
+    btnSmRed:  { background:"transparent", color:RED, border:`1px solid ${RED}`, borderRadius:0, padding:"7px 12px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer" },
+    macroInput:{ flex:1, display:"flex", flexDirection:"column", gap:5 },
   };
+
+  const editTarget = profiles.find(p=>p.id===editing) || activeProfile;
 
   return (
     <div style={S.overlay}>
       <div style={S.backdrop} onClick={onClose}/>
       <div style={S.panel}>
         <div style={S.head}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div>
               <div style={{ fontFamily:"'Bebas Neue'", fontSize:22, color:WHITE, letterSpacing:2 }}>SETTINGS</div>
               <div style={{ fontSize:10, color:"#444", letterSpacing:1 }}>IZANA MODE · {user.name}</div>
@@ -667,12 +719,114 @@ function SettingsPanel({ user, goals, onSaveGoals, onClose }) {
 
         <div style={S.body}>
 
-          {/* TDEE Calculator */}
-          <div style={{ marginBottom:6, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          {/* ── MACRO PROFILES ── */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <div style={S.labelRed}>📋 MACRO PROFILES</div>
+            <button style={S.btnSmRed} onClick={()=>setShowNew(v=>!v)}>+ New</button>
+          </div>
+
+          {showNew && (
+            <div style={{ ...S.card, display:"flex", gap:8, marginBottom:10 }}>
+              <input style={{ ...S.input, flex:1 }} placeholder="Profile name (e.g. Bulk Day)" value={newName} onChange={e=>setNewName(e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&createProfile()}/>
+              <button style={S.btnSmRed} onClick={createProfile}>Create</button>
+              <button style={S.btnSm} onClick={()=>setShowNew(false)}>✕</button>
+            </div>
+          )}
+
+          {profiles.map(p=>(
+            <div key={p.id} style={{ ...S.card, borderLeft:`3px solid ${p.isActive?RED:BORDER}`, cursor:"pointer", marginBottom:8 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }} onClick={()=>{ setEditing(p.id); setG({...p}); }}>
+                <div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:16, letterSpacing:1 }}>{p.name}</div>
+                    {p.isActive && <span style={{ background:RED, color:WHITE, fontSize:9, padding:"2px 6px", fontFamily:"'Bebas Neue'", letterSpacing:1 }}>ACTIVE</span>}
+                  </div>
+                  <div style={{ fontSize:11, color:MUTED, marginTop:2 }}>
+                    {p.calories} kcal · P:{p.protein}g · C:{p.carbs}g · F:{p.fat}g
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:6 }}>
+                  {!p.isActive && <button style={S.btnSmRed} onClick={e=>{ e.stopPropagation(); setActive(p.id); }}>Set Active</button>}
+                  {profiles.length>1 && <button style={{ ...S.btnSm, color:MUTED }} onClick={e=>{ e.stopPropagation(); deleteProfile(p.id); }}>✕</button>}
+                </div>
+              </div>
+
+              {/* Inline editor */}
+              {editing===p.id && (
+                <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${BORDER}` }}>
+                  <div style={{ marginBottom:12 }}>
+                    <div style={S.label}>PROFILE NAME</div>
+                    <input style={S.input} value={g.name||""} onChange={e=>setG(x=>({...x,name:e.target.value}))}/>
+                  </div>
+                  <div style={{ marginBottom:12 }}>
+                    <div style={S.label}>CALORIES (kcal)</div>
+                    <input style={S.input} type="number" value={g.calories||""} onChange={e=>setG(x=>({...x,calories:parseInt(e.target.value)||0}))}/>
+                  </div>
+                  <div style={S.row}>
+                    <div style={S.macroInput}>
+                      <div style={S.label}>PROTEIN (g)</div>
+                      <input style={S.input} type="number" value={g.protein||""} onChange={e=>setG(x=>({...x,protein:parseInt(e.target.value)||0}))}/>
+                    </div>
+                    <div style={S.macroInput}>
+                      <div style={S.label}>CARBS (g)</div>
+                      <input style={S.input} type="number" value={g.carbs||""} onChange={e=>setG(x=>({...x,carbs:parseInt(e.target.value)||0}))}/>
+                    </div>
+                    <div style={S.macroInput}>
+                      <div style={S.label}>FAT (g)</div>
+                      <input style={S.input} type="number" value={g.fat||""} onChange={e=>setG(x=>({...x,fat:parseInt(e.target.value)||0}))}/>
+                    </div>
+                  </div>
+
+                  {/* Diet type macro suggestion */}
+                  <div style={{ marginBottom:12 }}>
+                    <div style={S.label}>SUGGEST FROM DIET TYPE</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                      {Object.keys(DIET_MACROS).map(d=>(
+                        <button key={d} onClick={()=>suggestDietMacros(d)}
+                          style={{ padding:"5px 10px", fontFamily:"'DM Sans'", fontSize:11, background:CARD2, color:TEXT, border:`1px solid ${BORDER}`, cursor:"pointer" }}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Diet suggestion confirmation */}
+                  {dietSuggest && (
+                    <div style={{ ...S.cardBlack, marginBottom:12 }}>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:8 }}>{dietSuggest.diet.toUpperCase()} SUGGESTION</div>
+                      <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+                        {[["KCAL",dietSuggest.calories,RED],["PROT",dietSuggest.protein+"g",WHITE],["CARB",dietSuggest.carbs+"g",MUTED],["FAT",dietSuggest.fat+"g",RED_DIM]].map(([l,v,c])=>(
+                          <div key={l} style={{ flex:1, textAlign:"center" }}>
+                            <div style={{ fontFamily:"'Bebas Neue'", fontSize:22, color:c }}>{v}</div>
+                            <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>{l}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <button style={{ ...S.btn, flex:1 }} onClick={()=>applyToActive({ calories:dietSuggest.calories, protein:dietSuggest.protein, carbs:dietSuggest.carbs, fat:dietSuggest.fat })}>
+                          Apply to This Profile
+                        </button>
+                        <button style={{ ...S.btnSmRed, flex:1 }} onClick={()=>saveAsNewProfile({ calories:dietSuggest.calories, protein:dietSuggest.protein, carbs:dietSuggest.carbs, fat:dietSuggest.fat, diet:dietSuggest.diet }, `${dietSuggest.diet} Profile`)}>
+                          Save as New
+                        </button>
+                        <button style={S.btnSm} onClick={()=>setDietSuggest(null)}>✕</button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ fontSize:11, color:MUTED, marginBottom:12, padding:"8px 10px", background:CARD2, borderLeft:`2px solid ${BORDER}` }}>
+                    Calories from macros: <strong style={{ color:TEXT }}>{(g.protein||0)*4+(g.carbs||0)*4+(g.fat||0)*9} kcal</strong>
+                  </div>
+                  <button style={S.btn} onClick={()=>{ saveEditing(); setEditing(null); }}>✓ Save Profile</button>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* ── TDEE CALCULATOR ── */}
+          <div style={{ marginTop:6, marginBottom:6, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={S.labelRed}>🧮 TDEE CALCULATOR</div>
-            <button style={S.btnSm} onClick={()=>setTdeeMode(m=>!m)}>
-              {tdeeMode ? "▲ Hide" : "▼ Calculate"}
-            </button>
+            <button style={S.btnSm} onClick={()=>setTdeeMode(m=>!m)}>{tdeeMode?"▲ Hide":"▼ Calculate"}</button>
           </div>
 
           {tdeeMode && (
@@ -691,18 +845,16 @@ function SettingsPanel({ user, goals, onSaveGoals, onClose }) {
                   <input style={S.input} placeholder="25" type="number" value={tdee.age} onChange={e=>setTdee(t=>({...t,age:e.target.value}))}/>
                 </div>
               </div>
-
               <div style={{ marginBottom:12 }}>
                 <div style={S.label}>BIOLOGICAL SEX</div>
                 <div style={{ display:"flex", gap:8 }}>
                   {["male","female"].map(s=>(
-                    <button key={s} onClick={()=>setTdee(t=>({...t,sex:s}))} style={{ flex:1, padding:"9px", fontFamily:"'Bebas Neue'", fontSize:14, letterSpacing:1, background:tdee.sex===s?RED:"transparent", color:tdee.sex===s?WHITE:MUTED, border:`1px solid ${tdee.sex===s?RED:BORDER}`, cursor:"pointer", textTransform:"uppercase" }}>
-                      {s}
+                    <button key={s} onClick={()=>setTdee(t=>({...t,sex:s}))} style={{ flex:1, padding:"9px", fontFamily:"'Bebas Neue'", fontSize:14, letterSpacing:1, background:tdee.sex===s?RED:"transparent", color:tdee.sex===s?WHITE:MUTED, border:`1px solid ${tdee.sex===s?RED:BORDER}`, cursor:"pointer" }}>
+                      {s.toUpperCase()}
                     </button>
                   ))}
                 </div>
               </div>
-
               <div style={{ marginBottom:14 }}>
                 <div style={S.label}>ACTIVITY LEVEL</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
@@ -713,64 +865,31 @@ function SettingsPanel({ user, goals, onSaveGoals, onClose }) {
                   ))}
                 </div>
               </div>
-
-              <button style={S.btn} onClick={calcTDEE}>⚡ Calculate My Targets</button>
-
+              <button style={S.btn} onClick={calcTDEE}>⚡ Calculate</button>
               {tdeeResult && (
                 <div style={{ marginTop:14, background:BLACK, padding:"12px 14px" }}>
-                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:"#555", letterSpacing:2, marginBottom:8 }}>YOUR TARGETS — {user.goal?.toUpperCase()||"GOAL"}</div>
-                  <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-                    <div style={{ flex:1, textAlign:"center" }}>
-                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:RED }}>{tdeeResult.calories}</div>
-                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>KCAL</div>
-                    </div>
-                    <div style={{ flex:1, textAlign:"center" }}>
-                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:WHITE }}>{tdeeResult.protein}g</div>
-                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>PROTEIN</div>
-                    </div>
-                    <div style={{ flex:1, textAlign:"center" }}>
-                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:MUTED }}>{tdeeResult.carbs}g</div>
-                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>CARBS</div>
-                    </div>
-                    <div style={{ flex:1, textAlign:"center" }}>
-                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:RED_DIM }}>{tdeeResult.fat}g</div>
-                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>FAT</div>
-                    </div>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:"#555", letterSpacing:2, marginBottom:8 }}>RESULT — {user.goal?.toUpperCase()}</div>
+                  <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+                    {[["KCAL",tdeeResult.calories,RED],["PROT",tdeeResult.protein+"g",WHITE],["CARB",tdeeResult.carbs+"g",MUTED],["FAT",tdeeResult.fat+"g",RED_DIM]].map(([l,v,c])=>(
+                      <div key={l} style={{ flex:1, textAlign:"center" }}>
+                        <div style={{ fontFamily:"'Bebas Neue'", fontSize:24, color:c }}>{v}</div>
+                        <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>{l}</div>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ fontSize:10, color:"#555", textAlign:"center" }}>Maintenance: {tdeeResult.maintenance} kcal · targets applied below ↓</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button style={S.btn} onClick={()=>applyToActive({ calories:tdeeResult.calories, protein:tdeeResult.protein, carbs:tdeeResult.carbs, fat:tdeeResult.fat })}>
+                      Apply to Active Profile
+                    </button>
+                    <button style={S.btnSmRed} onClick={()=>saveAsNewProfile({ calories:tdeeResult.calories, protein:tdeeResult.protein, carbs:tdeeResult.carbs, fat:tdeeResult.fat }, "TDEE Profile")}>
+                      Save as New
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Manual Goals */}
-          <div style={S.labelRed}>🎯 DAILY MACRO TARGETS</div>
-          <div style={S.card}>
-            <div style={{ marginBottom:14 }}>
-              <div style={S.label}>CALORIES (kcal)</div>
-              <input style={S.input} type="number" value={g.calories} onChange={e=>setG(x=>({...x,calories:parseInt(e.target.value)||0}))}/>
-            </div>
-            <div style={S.row}>
-              <div style={S.macroInput}>
-                <div style={S.label}>PROTEIN (g)</div>
-                <input style={S.input} type="number" value={g.protein} onChange={e=>setG(x=>({...x,protein:parseInt(e.target.value)||0}))}/>
-              </div>
-              <div style={S.macroInput}>
-                <div style={S.label}>CARBS (g)</div>
-                <input style={S.input} type="number" value={g.carbs} onChange={e=>setG(x=>({...x,carbs:parseInt(e.target.value)||0}))}/>
-              </div>
-              <div style={S.macroInput}>
-                <div style={S.label}>FAT (g)</div>
-                <input style={S.input} type="number" value={g.fat} onChange={e=>setG(x=>({...x,fat:parseInt(e.target.value)||0}))}/>
-              </div>
-            </div>
-            <div style={{ fontSize:11, color:MUTED, marginBottom:14, padding:"8px 10px", background:CARD2, borderLeft:`2px solid ${BORDER}` }}>
-              Calories from macros: <strong style={{ color:TEXT }}>{g.protein*4 + g.carbs*4 + g.fat*9} kcal</strong>
-            </div>
-            <button style={S.btn} onClick={()=>onSaveGoals(g)}>✓ Save Targets</button>
-          </div>
-
-          {/* App info */}
           <div style={{ textAlign:"center", padding:"20px 0 0", borderTop:`1px solid ${BORDER}`, marginTop:6 }}>
             <div style={{ fontFamily:"'Bebas Neue'", fontSize:18, letterSpacing:4, color:MUTED }}>IZANA <span style={{ color:RED }}>MODE</span></div>
             <div style={{ fontSize:10, color:MUTED, marginTop:4, letterSpacing:1 }}>王者之道 · WAY OF THE SOVEREIGN</div>
@@ -1015,6 +1134,13 @@ function MainApp({ user }) {
   const [generatingPlan,setGeneratingPlan]=useState(false);
   const [healthSub,setHealthSub]=useState("metrics");
   const [goals,setGoals]=useState(()=>lsGet('oja_goals', DEFAULT_GOALS));
+  const [profiles,setProfiles]=useState(()=>{
+    const saved=lsGet('oja_profiles',null);
+    if(saved&&saved.length) return saved;
+    const base=lsGet('oja_goals',DEFAULT_GOALS);
+    return [{ id:1, name:"My Targets", ...base, isActive:true }];
+  });
+  const activeGoals = profiles.find(p=>p.isActive)||profiles[0]||DEFAULT_GOALS;
   const [showSettings,setShowSettings]=useState(false);
   const [rankNotif,setRankNotif]=useState(null);
   const [prevScore,setPrevScore]=useState(()=>lsGet('im_prevScore',0));
@@ -1044,8 +1170,9 @@ function MainApp({ user }) {
     [...foodLog].reverse().map(f => [f.name, f])
   ).values()];
 
-  // Persist goals
-  useEffect(()=>lsSet('oja_goals', goals),[goals]);
+  // Persist profiles
+  useEffect(()=>lsSet('oja_profiles', profiles),[profiles]);
+  useEffect(()=>lsSet('oja_goals', activeGoals),[activeGoals]);
   // Persist all logs
   useEffect(()=>lsSet('im_foodLog', foodLog),[foodLog]);
   useEffect(()=>lsSet('im_favorites', favorites),[favorites]);
@@ -1133,7 +1260,7 @@ function MainApp({ user }) {
     try {
       const res=await fetch("/api/claude",{ method:"POST", headers:{"Content-Type":"application/json"},
         body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1500,
-          messages:[{ role:"user", content:`Create a 7-day meal plan. Goal: ${user.goal}. Daily calories: ${goals.calories}. Diet: ${planPrefs.dietType==="None"?"Standard / no restrictions":planPrefs.dietType==="Custom"?planPrefs.restrictions:planPrefs.dietType}.
+          messages:[{ role:"user", content:`Create a 7-day meal plan. Goal: ${user.goal}. Daily calories: ${activeGoals.calories}. Diet: ${planPrefs.dietType==="None"?"Standard / no restrictions":planPrefs.dietType==="Custom"?planPrefs.restrictions:planPrefs.dietType}.
 Respond ONLY with valid JSON (no markdown): {"days":[{"day":"Monday","meals":[{"name":"meal name","calories":number,"protein":number,"carbs":number,"fat":number,"time":"Breakfast"}]}]}
 Include Breakfast, Lunch, Dinner, Snack for each day.` }]
         })
@@ -1207,7 +1334,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
   return (
     <div style={S.app}>
       {showAddFood && <AddFoodPanel onAdd={addFoodItem} onClose={()=>setShowAddFood(false)} favorites={favorites} recentFoods={recentFoods}/>}
-      {showSettings && <SettingsPanel user={user} goals={goals} onSaveGoals={(g)=>{ setGoals(g); setShowSettings(false); }} onClose={()=>setShowSettings(false)}/>}
+      {showSettings && <SettingsPanel user={user} profiles={profiles} onSaveProfiles={(p)=>{ setProfiles(p); setShowSettings(false); }} onClose={()=>setShowSettings(false)}/>}
       {rankNotif && <RankUpCelebration rank={rankNotif} onDone={()=>setRankNotif(null)}/>}
 
       <div style={S.header}>
@@ -1268,12 +1395,27 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             </div>
           </div>
 
+          {/* ── PROFILE SWITCHER ── */}
+          {profiles.length>0&&<div style={{ ...S.card, padding:"10px 14px", marginBottom:10 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <button onClick={()=>{ const i=profiles.findIndex(p=>p.isActive); const prev=(i-1+profiles.length)%profiles.length; setProfiles(ps=>ps.map((p,idx)=>({...p,isActive:idx===prev}))); }}
+                style={{ background:"transparent", border:`1px solid ${BORDER}`, color:MUTED, width:32, height:32, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
+              <div style={{ textAlign:"center", flex:1 }}>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:10, color:MUTED, letterSpacing:2 }}>TODAY'S TARGETS</div>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:18, color:TEXT, letterSpacing:1 }}>{activeGoals.name||"My Targets"}</div>
+                <div style={{ fontSize:10, color:MUTED }}>{activeGoals.calories} kcal · P:{activeGoals.protein}g · C:{activeGoals.carbs}g · F:{activeGoals.fat}g</div>
+              </div>
+              <button onClick={()=>{ const i=profiles.findIndex(p=>p.isActive); const next=(i+1)%profiles.length; setProfiles(ps=>ps.map((p,idx)=>({...p,isActive:idx===next}))); }}
+                style={{ background:"transparent", border:`1px solid ${BORDER}`, color:MUTED, width:32, height:32, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>
+            </div>
+          </div>}
+
           <div style={S.card}>
             <div style={S.labelRed}>Daily Calories</div>
             <div style={{ display:"flex", alignItems:"center", gap:20 }}>
-              <Ring value={totals.calories} max={goals.calories} size={86} stroke={9} color={RED}/>
+              <Ring value={totals.calories} max={activeGoals.calories} size={86} stroke={9} color={RED}/>
               <div style={{ flex:1 }}>
-                <div style={S.bigNum}>{Math.round(Math.max(0, goals.calories-totals.calories))}</div>
+                <div style={S.bigNum}>{Math.round(Math.max(0, activeGoals.calories-totals.calories))}</div>
                 <div style={{ fontSize:12, color:MUTED }}>kcal remaining</div>
                 {recoveryScore!==null&&<div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6 }}>
                   <div style={{ width:8, height:8, background:recoveryScore>70?RED:MUTED }}/>
@@ -1285,9 +1427,9 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
 
           <div style={S.card}>
             <div style={S.label}>Macros</div>
-            <MacroBar label="Protein" val={totals.protein} max={goals.protein} color={RED}/>
-            <MacroBar label="Carbs"   val={totals.carbs}   max={goals.carbs}   color={BLACK}/>
-            <MacroBar label="Fat"     val={totals.fat}      max={goals.fat}     color={MUTED}/>
+            <MacroBar label="Protein" val={totals.protein} max={activeGoals.protein} color={RED}/>
+            <MacroBar label="Carbs"   val={totals.carbs}   max={activeGoals.carbs}   color={BLACK}/>
+            <MacroBar label="Fat"     val={totals.fat}      max={activeGoals.fat}     color={MUTED}/>
           </div>
 
           <div style={{ display:"flex", gap:10, marginBottom:10 }}>
@@ -1380,10 +1522,10 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
           <div style={S.card}>
             <div style={S.labelRed}>Today's Totals</div>
             <div style={{ display:"flex", gap:8, justifyContent:"space-around" }}>
-              <Ring value={totals.calories} max={goals.calories} size={66} stroke={6} color={RED}     label="Kcal"/>
-              <Ring value={totals.protein}  max={goals.protein}  size={66} stroke={6} color={BLACK}   label="Protein"/>
-              <Ring value={totals.carbs}    max={goals.carbs}    size={66} stroke={6} color={MUTED}   label="Carbs"/>
-              <Ring value={totals.fat}      max={goals.fat}      size={66} stroke={6} color={RED_DIM} label="Fat"/>
+              <Ring value={totals.calories} max={activeGoals.calories} size={66} stroke={6} color={RED}     label="Kcal"/>
+              <Ring value={totals.protein}  max={activeGoals.protein}  size={66} stroke={6} color={BLACK}   label="Protein"/>
+              <Ring value={totals.carbs}    max={activeGoals.carbs}    size={66} stroke={6} color={MUTED}   label="Carbs"/>
+              <Ring value={totals.fat}      max={activeGoals.fat}      size={66} stroke={6} color={RED_DIM} label="Fat"/>
             </div>
           </div>
 
@@ -1663,7 +1805,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 <span style={{ fontSize:12, color:MUTED }}>Goal</span><span style={{ fontSize:12, fontWeight:600 }}>{goalLabel[user.goal]}</span>
               </div>
               <div style={{ ...S.card2, marginBottom:14, display:"flex", justifyContent:"space-between" }}>
-                <span style={{ fontSize:12, color:MUTED }}>Daily Calories</span><span style={{ fontSize:12, fontWeight:600 }}>{goals.calories} kcal</span>
+                <span style={{ fontSize:12, color:MUTED }}>Daily Calories</span><span style={{ fontSize:12, fontWeight:600 }}>{activeGoals.calories} kcal</span>
               </div>
               <button style={S.btn} onClick={generateMealPlan} disabled={generatingPlan}>{generatingPlan?"🤖 Claude is Planning...":"🤖 Generate 7-Day Plan"}</button>
             </div>
