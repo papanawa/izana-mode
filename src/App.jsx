@@ -637,7 +637,7 @@ function SettingsPanel({ user, goals, onSaveGoals, onClose }) {
                 <div style={S.label}>ACTIVITY LEVEL</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                   {Object.entries(activityLabels).map(([k,v])=>(
-                    <button key={k} onClick={()=>setTdee(t=>({...t,activity:k}))} style={{ textAlign:"left", padding:"8px 12px", fontFamily:"'DM Sans'", fontSize:12, background:tdee.activity===k?RED+\"18\":\"transparent\", color:tdee.activity===k?RED:MUTED, border:`1px solid ${tdee.activity===k?RED:BORDER}`, cursor:"pointer", borderLeft:tdee.activity===k?`3px solid ${RED}`:`3px solid transparent` }}>
+                    <button key={k} onClick={()=>setTdee(t=>({...t,activity:k}))} style={{ textAlign:"left", padding:"8px 12px", fontFamily:"'DM Sans'", fontSize:12, background:tdee.activity===k?RED+"18":"transparent", color:tdee.activity===k?RED:MUTED, border:`1px solid ${tdee.activity===k?RED:BORDER}`, cursor:"pointer", borderLeft:tdee.activity===k?`3px solid ${RED}`:`3px solid transparent` }}>
                       {v}
                     </button>
                   ))}
