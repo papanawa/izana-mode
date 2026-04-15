@@ -279,6 +279,14 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
   const [imgPreview, setImgPreview] = useState(null);
   const [imgBase64, setImgBase64] = useState(null);
   const [barcodeVal, setBarcodeVal] = useState(null);
+  const [mealType, setMealType] = useState(() => {
+    const h = new Date().getHours();
+    if (h < 10) return "Breakfast";
+    if (h < 13) return "Lunch";
+    if (h < 17) return "Snack";
+    if (h < 20) return "Dinner";
+    return "Snack";
+  });
   const fileRef = useRef();
   const cameraRef = useRef();
 
@@ -363,7 +371,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
   };
 
   const quickAdd = (food) => {
-    onAdd({ ...food, time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), id:Date.now() });
+    onAdd({ ...food, mealType, time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), id:Date.now() });
   };
 
   const selectResult = (r) => { setResult(r); setQuantity(1); };
@@ -395,6 +403,16 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:WHITE, letterSpacing:2 }}>LOG FOOD</div>
             <button onClick={onClose} style={{ background:"transparent", border:"none", color:"#555", fontSize:20, cursor:"pointer", lineHeight:1 }}>✕</button>
+          </div>
+          {/* Meal type selector */}
+          <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:8, marginBottom:4 }}>
+            {["Breakfast","Lunch","Dinner","Snack","Pre-Workout","Post-Workout"].map(m=>(
+              <button key={m} onClick={()=>setMealType(m)} style={{
+                flexShrink:0, padding:"5px 10px", fontFamily:"'Bebas Neue'", fontSize:11, letterSpacing:1.5,
+                background:mealType===m?RED:"transparent", color:mealType===m?WHITE:"#555",
+                border:`1px solid ${mealType===m?RED:"#333"}`, cursor:"pointer", whiteSpace:"nowrap"
+              }}>{m}</button>
+            ))}
           </div>
           <div style={{ display:"flex" }}>
             {[{ id:"search", icon:"🔍", label:"Search" },{ id:"photo", icon:"📷", label:"Photo" },{ id:"barcode", icon:"📊", label:"Barcode" }].map(t=>(
@@ -1328,10 +1346,13 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
 
           {foodLog.length>0&&<div style={S.card}>
             <div style={S.label}>Today's Food</div>
-            {foodLog.slice(-3).reverse().map(f=>(
+            {foodLog.slice(-4).reverse().map(f=>(
               <div key={f.id} style={{ ...S.card2, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <div><div style={{ fontWeight:600, fontSize:13 }}>{f.name}</div><div style={{ fontSize:11, color:MUTED }}>{f.time}</div></div>
-                <span style={{ fontFamily:"'Bebas Neue'", fontSize:18, color:RED }}>{f.calories} kcal</span>
+                <div>
+                  <div style={{ fontWeight:600, fontSize:13 }}>{f.name}</div>
+                  <div style={{ fontSize:11, color:MUTED }}>{f.mealType||f.time} · {f.time}</div>
+                </div>
+                <span style={{ fontFamily:"'Bebas Neue'", fontSize:18, color:RED }}>{Math.round(f.calories)} kcal</span>
               </div>
             ))}
           </div>}
@@ -1387,28 +1408,47 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 <div style={{ fontSize:12, color:MUTED, marginBottom:16 }}>Search, scan a photo, or scan a barcode to add meals</div>
                 <button style={S.btn} onClick={()=>setShowAddFood(true)}>Log Food</button>
               </div>
-            :[...foodLog].reverse().map(f=>(
-                <div key={f.id} style={S.card}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontWeight:600, fontSize:14 }}>{f.name}</div>
-                      <div style={{ fontSize:11, color:MUTED }}>{f.serving} · {f.time}</div>
+            :(() => {
+                const MEAL_ORDER = ["Breakfast","Lunch","Dinner","Snack","Pre-Workout","Post-Workout","Other"];
+                const grouped = {};
+                [...foodLog].reverse().forEach(f => {
+                  const key = f.mealType || "Other";
+                  if (!grouped[key]) grouped[key] = [];
+                  grouped[key].push(f);
+                });
+                return MEAL_ORDER.filter(m => grouped[m]).map(meal => (
+                  <div key={meal}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, marginTop:4 }}>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:2 }}>{meal}</div>
+                      <div style={{ fontSize:11, color:MUTED }}>
+                        {Math.round(grouped[meal].reduce((a,f)=>a+(f.calories||0),0))} kcal
+                      </div>
                     </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-                      <button onClick={()=>toggleFavorite(f)} style={{ background:"transparent", border:"none", cursor:"pointer", fontSize:16, color:favorites.find(x=>x.name===f.name)?RED:BORDER, lineHeight:1, padding:"2px 4px" }}>
-                        {favorites.find(x=>x.name===f.name)?"★":"☆"}
-                      </button>
-                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:RED }}>{Math.round(f.calories)}</div>
-                      <button onClick={()=>deleteFoodItem(f.id)} style={{ background:"transparent", border:`1px solid ${BORDER}`, cursor:"pointer", color:MUTED, fontSize:12, lineHeight:1, padding:"3px 7px", letterSpacing:0.3 }} title="Remove">✕</button>
-                    </div>
+                    {grouped[meal].map(f=>(
+                      <div key={f.id} style={S.card}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontWeight:600, fontSize:14 }}>{f.name}</div>
+                            <div style={{ fontSize:11, color:MUTED }}>{f.serving} · {f.time}</div>
+                          </div>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                            <button onClick={()=>toggleFavorite(f)} style={{ background:"transparent", border:"none", cursor:"pointer", fontSize:16, color:favorites.find(x=>x.name===f.name)?RED:BORDER, lineHeight:1, padding:"2px 4px" }}>
+                              {favorites.find(x=>x.name===f.name)?"★":"☆"}
+                            </button>
+                            <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:RED }}>{Math.round(f.calories)}</div>
+                            <button onClick={()=>deleteFoodItem(f.id)} style={{ background:"transparent", border:`1px solid ${BORDER}`, cursor:"pointer", color:MUTED, fontSize:12, lineHeight:1, padding:"3px 7px" }}>✕</button>
+                          </div>
+                        </div>
+                        <div style={{ display:"flex", gap:6 }}>
+                          <span style={S.pill(BLACK)}>P: {Math.round(f.protein)}g</span>
+                          <span style={S.pill(MUTED)}>C: {Math.round(f.carbs)}g</span>
+                          <span style={S.pill(RED)}>F: {Math.round(f.fat)}g</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <span style={S.pill(BLACK)}>P: {Math.round(f.protein)}g</span>
-                    <span style={S.pill(MUTED)}>C: {Math.round(f.carbs)}g</span>
-                    <span style={S.pill(RED)}>F: {Math.round(f.fat)}g</span>
-                  </div>
-                </div>
-              ))
+                ));
+              })()
           }
         </>)}
 
@@ -1725,6 +1765,8 @@ export default function App() {
 
   const handleComplete=(d)=>{
     lsSet('im_user', d);
+    // Auto-apply TDEE-calculated goals if user filled in stats during onboarding
+    if(d.calcedGoals) lsSet('oja_goals', d.calcedGoals);
     setUser(d);
     setWelcomed(true);
   };
