@@ -170,7 +170,26 @@ function SleepChart({ data }) {
   );
 }
 
-function StarRating({ value, onChange, color=RED }) {
+function CardioChart({ data }) {
+  if (!data||data.length<2) return <div style={{ textAlign:"center", padding:"20px 0", color:MUTED, fontSize:13 }}>Log at least 2 sessions to see your trend</div>;
+  const durations = data.map(d=>parseFloat(d.duration)||0);
+  const maxD = Math.max(...durations)+5;
+  const W=320, H=100, pad=20;
+  const toX=(i)=>pad+(i/(data.length-1))*(W-pad*2);
+  const toY=(v)=>H-pad-(v/maxD)*(H-pad*2);
+  const pts=data.map((d,i)=>`${toX(i)},${toY(parseFloat(d.duration)||0)}`).join(" ");
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:"visible" }}>
+      <polyline points={pts} fill="none" stroke={RED} strokeWidth="2.5" strokeLinejoin="round"/>
+      {data.map((d,i)=>(
+        <g key={i}>
+          <circle cx={toX(i)} cy={toY(parseFloat(d.duration)||0)} r="4" fill={RED}/>
+          <text x={toX(i)} y={toY(parseFloat(d.duration)||0)-8} textAnchor="middle" style={{ fontSize:9, fontFamily:"'DM Sans'", fill:TEXT }}>{d.duration}m</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
   return (
     <div style={{ display:"flex", gap:6 }}>
       {[1,2,3,4,5].map(s=>(
@@ -672,6 +691,8 @@ function SettingsPanel({ user, session, profiles, onSaveProfiles, onReset, onExp
   const [dietSuggest, setDietSuggest] = useState(null); // { diet, calories, protein, carbs, fat }
 
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const activityLabels = { sedentary:"Sedentary (desk job)", light:"Light (1-3x/week)", moderate:"Moderate (3-5x/week)", active:"Active (6-7x/week)", veryactive:"Very Active (athlete)" };
 
   const calcTDEE = () => {
@@ -964,28 +985,50 @@ function SettingsPanel({ user, session, profiles, onSaveProfiles, onReset, onExp
 
               {/* Reset */}
               {!confirmReset
-                ? <button style={{ ...S.btnSmRed, width:"100%", textAlign:"center", padding:"11px" }}
-                    onClick={()=>setConfirmReset(true)}>
+                ? <button style={{ ...S.btnSmRed, width:"100%", textAlign:"center", padding:"11px", marginBottom:8 }}
+                    onClick={()=>{ setConfirmReset(true); setConfirmDelete(false); }}>
                     🔄 Reset All My Data
                   </button>
-                : <div style={{ background:BLACK, border:`1px solid ${RED}`, padding:"14px" }}>
-                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:2, marginBottom:6 }}>
-                      ARE YOU SURE?
-                    </div>
+                : <div style={{ background:BLACK, border:`1px solid ${RED}`, padding:"14px", marginBottom:8 }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:2, marginBottom:6 }}>ARE YOU SURE?</div>
                     <div style={{ fontSize:12, color:MUTED, marginBottom:14, lineHeight:1.6 }}>
                       This will permanently delete all your food logs, workouts, sleep entries, body metrics, progress photos, and streaks. Your name and goal will be reset. This cannot be undone.
                     </div>
                     <div style={{ display:"flex", gap:8 }}>
-                      <button style={{ ...S.btn, flex:1, background:RED }} onClick={onReset}>
-                        Yes, Reset Everything
-                      </button>
-                      <button style={{ ...S.btnSm, flex:1, textAlign:"center" }}
-                        onClick={()=>setConfirmReset(false)}>
-                        Cancel
-                      </button>
+                      <button style={{ ...S.btn, flex:1, background:RED }} onClick={onReset}>Yes, Reset Everything</button>
+                      <button style={{ ...S.btnSm, flex:1, textAlign:"center" }} onClick={()=>setConfirmReset(false)}>Cancel</button>
                     </div>
                   </div>
               }
+
+              {/* Delete Account */}
+              {session && <>
+                {!confirmDelete
+                  ? <button style={{ ...S.btnSm, width:"100%", textAlign:"center", padding:"11px", color:MUTED, borderColor:BORDER }}
+                      onClick={()=>{ setConfirmDelete(true); setConfirmReset(false); }}>
+                      🗑️ Delete Account Permanently
+                    </button>
+                  : <div style={{ background:BLACK, border:`1px solid ${RED}`, padding:"14px" }}>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:2, marginBottom:6 }}>DELETE ACCOUNT?</div>
+                      <div style={{ fontSize:12, color:MUTED, marginBottom:14, lineHeight:1.6 }}>
+                        This will permanently delete your account and ALL data from our servers. This cannot be undone. You will be signed out immediately.
+                      </div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <button style={{ ...S.btn, flex:1, background:RED }} disabled={deletingAccount} onClick={async()=>{
+                          setDeletingAccount(true);
+                          try {
+                            const userId = session?.access_token ? JSON.parse(atob(session.access_token.split('.')[1]))?.sub : null;
+                            if (userId) await sbDeleteAccount(session.access_token, userId);
+                          } catch {}
+                          onReset();
+                        }}>
+                          {deletingAccount ? "Deleting..." : "Yes, Delete Everything"}
+                        </button>
+                        <button style={{ ...S.btnSm, flex:1, textAlign:"center" }} onClick={()=>setConfirmDelete(false)}>Cancel</button>
+                      </div>
+                    </div>
+                }
+              </>}
             </div>
           </div>
 
@@ -1351,6 +1394,11 @@ function MainApp({ user, session, onSignOut }) {
   const [newCardio,setNewCardio]=useState({ type:"Run", duration:"", distance:"", effort:3, caloriesBurned:"", caloriesEstimated:null, estimatingCals:false });
   const [showCardioForm,setShowCardioForm]=useState(false);
   const [editingFood,setEditingFood]=useState(null);
+  const [logDate,setLogDate]=useState(()=>new Date().toDateString()); // food log history
+  const [expandedSession,setExpandedSession]=useState(null); // workout history detail
+  const [notifEnabled,setNotifEnabled]=useState(()=>lsGet('im_notifEnabled',false));
+  const [bodyMeasurements,setBodyMeasurements]=useState(()=>lsGet('im_bodyMeasurements',[]));
+  const [newMeasurement,setNewMeasurement]=useState({ chest:"", waist:"", hips:"", arms:"", thighs:"" });
   const [newExName,setNewExName]=useState("");
   const [newWeight,setNewWeight]=useState("");
   const [newSleep,setNewSleep]=useState({ hours:"", quality:3, soreness:3 });
@@ -1384,6 +1432,40 @@ function MainApp({ user, session, onSignOut }) {
   useEffect(()=>lsSet('im_customWorkouts', customWorkouts),[customWorkouts]);
   useEffect(()=>lsSet('im_progressPhotos', progressPhotos),[progressPhotos]);
   useEffect(()=>lsSet('im_cardioLog', cardioLog),[cardioLog]);
+  useEffect(()=>lsSet('im_bodyMeasurements', bodyMeasurements),[bodyMeasurements]);
+  useEffect(()=>lsSet('im_notifEnabled', notifEnabled),[notifEnabled]);
+
+  // Personal records — find max weight per exercise across all sessions
+  const personalRecords = (() => {
+    const prs = {};
+    sessions.forEach(s => {
+      s.exercises?.forEach(ex => {
+        ex.sets?.forEach(set => {
+          const w = parseFloat(set.weight);
+          if (!isNaN(w) && w > 0) {
+            if (!prs[ex.name] || w > prs[ex.name]) prs[ex.name] = w;
+          }
+        });
+      });
+    });
+    return prs;
+  })();
+
+  // Check if latest session has any new PRs
+  const latestSessionPRs = (() => {
+    if (!sessions.length) return [];
+    const latest = sessions[sessions.length-1];
+    const prs = [];
+    latest.exercises?.forEach(ex => {
+      ex.sets?.forEach(set => {
+        const w = parseFloat(set.weight);
+        if (!isNaN(w) && w > 0 && personalRecords[ex.name] === w) {
+          if (!prs.find(p=>p.name===ex.name)) prs.push({ name:ex.name, weight:w });
+        }
+      });
+    });
+    return prs;
+  })();
   useEffect(()=>lsSet('im_waterLog', waterLog),[waterLog]);
   useEffect(()=>lsSet('im_prevScore', prevScore),[prevScore]);
 
@@ -1458,6 +1540,25 @@ function MainApp({ user, session, onSignOut }) {
   const addFoodItem = (item) => { setFoodLog(p=>[...p, item]); };
   const deleteFoodItem = (id) => { setFoodLog(p=>p.filter(f=>f.id!==id)); };
   const editFoodItem = (id, changes) => { setFoodLog(p=>p.map(f=>f.id===id?{...f,...changes}:f)); };
+
+  const enableNotifications = async () => {
+    if (!("Notification" in window)) return alert("Notifications not supported on this device.");
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      setNotifEnabled(true);
+      new Notification("Izana Mode", { body:"Notifications enabled! We'll remind you to log your meals and workouts.", icon:"/icon-192.png" });
+    } else {
+      setNotifEnabled(false);
+      alert("Notification permission denied. Enable in your browser settings.");
+    }
+  };
+
+  const addMeasurement = () => {
+    const hasAny = Object.values(newMeasurement).some(v=>v.trim()!=="");
+    if (!hasAny) return;
+    setBodyMeasurements(p=>[...p, { ...newMeasurement, id:Date.now(), date:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}) }]);
+    setNewMeasurement({ chest:"", waist:"", hips:"", arms:"", thighs:"" });
+  };
 
   const addCardio = () => {
     if (!newCardio.duration || isNaN(parseFloat(newCardio.duration))) return;
@@ -1803,14 +1904,33 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <button style={S.btnSmRed} onClick={()=>setShowAddFood(true)}>+ Log Food</button>
           </div>
 
-          <div style={S.card}>
-            <div style={S.labelRed}>Today's Totals</div>
-            <div style={{ display:"flex", gap:8, justifyContent:"space-around" }}>
-              <Ring value={totals.calories} max={activeGoals.calories} size={66} stroke={6} color={RED}     label="Kcal"/>
-              <Ring value={totals.protein}  max={activeGoals.protein}  size={66} stroke={6} color={BLACK}   label="Protein"/>
-              <Ring value={totals.carbs}    max={activeGoals.carbs}    size={66} stroke={6} color={MUTED}   label="Carbs"/>
-              <Ring value={totals.fat}      max={activeGoals.fat}      size={66} stroke={6} color={RED_DIM} label="Fat"/>
+          {/* Date navigator */}
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+            <button onClick={()=>{ const d=new Date(logDate); d.setDate(d.getDate()-1); setLogDate(d.toDateString()); }}
+              style={{ background:CARD2, border:`1px solid ${BORDER}`, color:TEXT, width:32, height:32, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
+            <div style={{ flex:1, textAlign:"center", fontFamily:"'Bebas Neue'", fontSize:14, letterSpacing:1 }}>
+              {logDate===new Date().toDateString()?"Today":new Date(logDate).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}
             </div>
+            <button onClick={()=>{ const d=new Date(logDate); d.setDate(d.getDate()+1); if(d<=new Date()) setLogDate(d.toDateString()); }}
+              style={{ background:CARD2, border:`1px solid ${BORDER}`, color:new Date(logDate).toDateString()===new Date().toDateString()?BORDER:TEXT, width:32, height:32, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>
+          </div>
+
+          <div style={S.card}>
+            <div style={S.labelRed}>
+              {logDate===new Date().toDateString()?"Today's Totals":"Day Totals"}
+            </div>
+            {(() => {
+              const dayLog = foodLog.filter(f => new Date(f.id).toDateString()===logDate);
+              const dayTotals = dayLog.reduce((a,f)=>({ calories:a.calories+(f.calories||0), protein:a.protein+(f.protein||0), carbs:a.carbs+(f.carbs||0), fat:a.fat+(f.fat||0) }),{ calories:0, protein:0, carbs:0, fat:0 });
+              return (
+                <div style={{ display:"flex", gap:8, justifyContent:"space-around" }}>
+                  <Ring value={dayTotals.calories} max={activeGoals.calories} size={66} stroke={6} color={RED}     label="Kcal"/>
+                  <Ring value={dayTotals.protein}  max={activeGoals.protein}  size={66} stroke={6} color={BLACK}   label="Protein"/>
+                  <Ring value={dayTotals.carbs}    max={activeGoals.carbs}    size={66} stroke={6} color={MUTED}   label="Carbs"/>
+                  <Ring value={dayTotals.fat}      max={activeGoals.fat}      size={66} stroke={6} color={RED_DIM} label="Fat"/>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Favorites quick-access */}
@@ -1827,83 +1947,72 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             </div>
           </div>}
 
-          {foodLog.length===0
-            ?<div style={{ ...S.card, textAlign:"center", padding:"36px 20px" }}>
-                <div style={{ fontSize:34, marginBottom:10 }}>🍽️</div>
-                <div style={{ fontFamily:"'Bebas Neue'", fontSize:17, letterSpacing:1, marginBottom:6 }}>No food logged yet</div>
-                <div style={{ fontSize:12, color:MUTED, marginBottom:16 }}>Search, scan a photo, or scan a barcode to add meals</div>
-                <button style={S.btn} onClick={()=>setShowAddFood(true)}>Log Food</button>
-              </div>
-            :(() => {
-                const MEAL_ORDER = ["Breakfast","Lunch","Dinner","Snack","Pre-Workout","Post-Workout","Other"];
-                const grouped = {};
-                [...foodLog].reverse().forEach(f => {
-                  const key = f.mealType || "Other";
-                  if (!grouped[key]) grouped[key] = [];
-                  grouped[key].push(f);
-                });
-                return MEAL_ORDER.filter(m => grouped[m]).map(meal => (
-                  <div key={meal}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, marginTop:4 }}>
-                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:2 }}>{meal}</div>
-                      <div style={{ fontSize:11, color:MUTED }}>
-                        {Math.round(grouped[meal].reduce((a,f)=>a+(f.calories||0),0))} kcal
-                      </div>
-                    </div>
-                    {grouped[meal].map(f=>(
-                      <div key={f.id} style={S.card}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontWeight:600, fontSize:14 }}>{f.name}</div>
-                            <div style={{ fontSize:11, color:MUTED }}>{f.serving} · {f.time}</div>
-                          </div>
-                          <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-                            <button onClick={()=>toggleFavorite(f)} style={{ background:"transparent", border:"none", cursor:"pointer", fontSize:16, color:favorites.find(x=>x.name===f.name)?RED:BORDER, lineHeight:1, padding:"2px 4px" }}>
-                              {favorites.find(x=>x.name===f.name)?"★":"☆"}
-                            </button>
-                            <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:RED }}>{Math.round(f.calories)}</div>
-                            <button onClick={()=>setEditingFood(editingFood===f.id?null:f.id)} style={{ background:"transparent", border:`1px solid ${BORDER}`, cursor:"pointer", color:MUTED, fontSize:11, padding:"3px 7px" }}>✏️</button>
-                            <button onClick={()=>deleteFoodItem(f.id)} style={{ background:"transparent", border:`1px solid ${BORDER}`, cursor:"pointer", color:MUTED, fontSize:12, lineHeight:1, padding:"3px 7px" }}>✕</button>
-                          </div>
-                        </div>
-                        <div style={{ display:"flex", gap:6, marginBottom: editingFood===f.id?10:0 }}>
-                          <span style={S.pill(BLACK)}>P: {Math.round(f.protein)}g</span>
-                          <span style={S.pill(MUTED)}>C: {Math.round(f.carbs)}g</span>
-                          <span style={S.pill(RED)}>F: {Math.round(f.fat)}g</span>
-                        </div>
-                        {editingFood===f.id&&(
-                          <div style={{ borderTop:`1px solid ${BORDER}`, paddingTop:10 }}>
-                            <div style={{ fontSize:11, color:MUTED, marginBottom:8, letterSpacing:1 }}>EDIT ENTRY</div>
-                            <div style={{ marginBottom:8 }}>
-                              <input defaultValue={f.name} onBlur={e=>editFoodItem(f.id,{name:e.target.value})}
-                                style={{ ...S.input, fontSize:13, marginBottom:8 }} placeholder="Food name"/>
-                            </div>
-                            <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-                              <div style={{ flex:1 }}>
-                                <div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>KCAL</div>
-                                <input type="number" defaultValue={f.calories} onBlur={e=>editFoodItem(f.id,{calories:parseFloat(e.target.value)||f.calories})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/>
-                              </div>
-                              <div style={{ flex:1 }}>
-                                <div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>PROTEIN (g)</div>
-                                <input type="number" defaultValue={f.protein} onBlur={e=>editFoodItem(f.id,{protein:parseFloat(e.target.value)||f.protein})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/>
-                              </div>
-                              <div style={{ flex:1 }}>
-                                <div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>CARBS (g)</div>
-                                <input type="number" defaultValue={f.carbs} onBlur={e=>editFoodItem(f.id,{carbs:parseFloat(e.target.value)||f.carbs})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/>
-                              </div>
-                              <div style={{ flex:1 }}>
-                                <div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>FAT (g)</div>
-                                <input type="number" defaultValue={f.fat} onBlur={e=>editFoodItem(f.id,{fat:parseFloat(e.target.value)||f.fat})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/>
-                              </div>
-                            </div>
-                            <button onClick={()=>setEditingFood(null)} style={{ ...S.btnSm, width:"100%", textAlign:"center" }}>✓ Done</button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+          {(() => {
+              const dayLog = foodLog.filter(f => new Date(f.id).toDateString()===logDate);
+              if (dayLog.length===0) return (
+                <div style={{ ...S.card, textAlign:"center", padding:"36px 20px" }}>
+                  <div style={{ fontSize:34, marginBottom:10 }}>🍽️</div>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:17, letterSpacing:1, marginBottom:6 }}>
+                    {logDate===new Date().toDateString()?"No food logged yet":"Nothing logged this day"}
                   </div>
-                ));
-              })()
+                  <div style={{ fontSize:12, color:MUTED, marginBottom:16 }}>
+                    {logDate===new Date().toDateString()?"Search, scan a photo, or scan a barcode to add meals":""}
+                  </div>
+                  {logDate===new Date().toDateString()&&<button style={S.btn} onClick={()=>setShowAddFood(true)}>Log Food</button>}
+                </div>
+              );
+              const MEAL_ORDER = ["Breakfast","Lunch","Dinner","Snack","Pre-Workout","Post-Workout","Other"];
+              const grouped = {};
+              [...dayLog].reverse().forEach(f => {
+                const key = f.mealType || "Other";
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(f);
+              });
+              return MEAL_ORDER.filter(m => grouped[m]).map(meal => (
+                <div key={meal}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, marginTop:4 }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:2 }}>{meal}</div>
+                    <div style={{ fontSize:11, color:MUTED }}>{Math.round(grouped[meal].reduce((a,f)=>a+(f.calories||0),0))} kcal</div>
+                  </div>
+                  {grouped[meal].map(f=>(
+                    <div key={f.id} style={S.card}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontWeight:600, fontSize:14 }}>{f.name}</div>
+                          <div style={{ fontSize:11, color:MUTED }}>{f.serving} · {f.time}</div>
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                          <button onClick={()=>toggleFavorite(f)} style={{ background:"transparent", border:"none", cursor:"pointer", fontSize:16, color:favorites.find(x=>x.name===f.name)?RED:BORDER, lineHeight:1, padding:"2px 4px" }}>
+                            {favorites.find(x=>x.name===f.name)?"★":"☆"}
+                          </button>
+                          <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:RED }}>{Math.round(f.calories)}</div>
+                          <button onClick={()=>setEditingFood(editingFood===f.id?null:f.id)} style={{ background:"transparent", border:`1px solid ${BORDER}`, cursor:"pointer", color:MUTED, fontSize:11, padding:"3px 7px" }}>✏️</button>
+                          <button onClick={()=>deleteFoodItem(f.id)} style={{ background:"transparent", border:`1px solid ${BORDER}`, cursor:"pointer", color:MUTED, fontSize:12, lineHeight:1, padding:"3px 7px" }}>✕</button>
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", gap:6, marginBottom:editingFood===f.id?10:0 }}>
+                        <span style={S.pill(BLACK)}>P: {Math.round(f.protein)}g</span>
+                        <span style={S.pill(MUTED)}>C: {Math.round(f.carbs)}g</span>
+                        <span style={S.pill(RED)}>F: {Math.round(f.fat)}g</span>
+                      </div>
+                      {editingFood===f.id&&(
+                        <div style={{ borderTop:`1px solid ${BORDER}`, paddingTop:10 }}>
+                          <div style={{ fontSize:11, color:MUTED, marginBottom:8, letterSpacing:1 }}>EDIT ENTRY</div>
+                          <input defaultValue={f.name} onBlur={e=>editFoodItem(f.id,{name:e.target.value})} style={{ ...S.input, fontSize:13, marginBottom:8 }} placeholder="Food name"/>
+                          <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>KCAL</div><input type="number" defaultValue={f.calories} onBlur={e=>editFoodItem(f.id,{calories:parseFloat(e.target.value)||f.calories})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
+                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>PROTEIN</div><input type="number" defaultValue={f.protein} onBlur={e=>editFoodItem(f.id,{protein:parseFloat(e.target.value)||f.protein})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
+                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>CARBS</div><input type="number" defaultValue={f.carbs} onBlur={e=>editFoodItem(f.id,{carbs:parseFloat(e.target.value)||f.carbs})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
+                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>FAT</div><input type="number" defaultValue={f.fat} onBlur={e=>editFoodItem(f.id,{fat:parseFloat(e.target.value)||f.fat})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
+                          </div>
+                          <button onClick={()=>setEditingFood(null)} style={{ ...S.btnSm, width:"100%", textAlign:"center" }}>✓ Done</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ));
+            })()
           }
         </>)}
 
@@ -1977,6 +2086,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
 
           {cardioLog.length>0&&<div style={S.card}>
             <div style={S.label}>Recent Cardio</div>
+            {cardioLog.length>=2&&<><CardioChart data={[...cardioLog].slice(-10)}/><div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:2, marginBottom:8 }}>Duration trend (last {Math.min(cardioLog.length,10)} sessions)</div></>}
             {[...cardioLog].reverse().slice(0,5).map(c=>(
               <div key={c.id} style={{ ...S.card2, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <div>
@@ -1994,11 +2104,42 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
 
           <div style={S.labelRed}>🏋️ Strength</div>
           {sessions.length>0&&<div style={S.card}>
-            <div style={S.label}>Recent Sessions</div>
-            {sessions.slice(-3).reverse().map(s=>(
-              <div key={s.id} style={{ ...S.card2, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <div><div style={{ fontWeight:600 }}>{s.name}</div><div style={{ fontSize:11, color:MUTED }}>{s.exercises?.length} exercises · {s.start}–{s.end}</div></div>
-                <span style={S.pill(RED)}>✓</span>
+            <div style={S.label}>Workout History</div>
+            {[...sessions].reverse().slice(0,10).map(s=>(
+              <div key={s.id} style={{ marginBottom:6 }}>
+                <div style={{ ...S.card2, cursor:"pointer" }} onClick={()=>setExpandedSession(expandedSession===s.id?null:s.id)}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:13 }}>{s.name}</div>
+                      <div style={{ fontSize:11, color:MUTED }}>{s.date} · {s.exercises?.length} exercises · {s.start}–{s.end}</div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      {s.exercises?.some(ex=>ex.sets?.some(st=>parseFloat(st.weight)>0&&personalRecords[ex.name]===parseFloat(st.weight)))&&
+                        <span style={{ background:RED, color:WHITE, fontSize:9, padding:"2px 6px", fontFamily:"'Bebas Neue'", letterSpacing:1 }}>PR</span>}
+                      <span style={{ color:MUTED, fontSize:16 }}>{expandedSession===s.id?"▲":"▼"}</span>
+                    </div>
+                  </div>
+                </div>
+                {expandedSession===s.id&&(
+                  <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderTop:"none", padding:"10px 12px" }}>
+                    {s.exercises?.map((ex,ei)=>(
+                      <div key={ei} style={{ marginBottom:10 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                          <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:1 }}>{ex.name}</div>
+                          {personalRecords[ex.name]&&ex.sets?.some(st=>parseFloat(st.weight)===personalRecords[ex.name])&&
+                            <span style={{ background:RED, color:WHITE, fontSize:9, padding:"1px 5px", fontFamily:"'Bebas Neue'", letterSpacing:1 }}>PR {personalRecords[ex.name]}lbs</span>}
+                        </div>
+                        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                          {ex.sets?.map((st,si)=>(st.reps||st.weight)&&(
+                            <span key={si} style={{ background:CARD2, border:`1px solid ${BORDER}`, fontSize:11, padding:"3px 8px", fontFamily:"'DM Sans'" }}>
+                              {si+1}: {st.reps||"—"} reps @ {st.weight||"—"} lbs
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>}
@@ -2099,6 +2240,51 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               <div style={{ fontFamily:"'Bebas Neue'", fontSize:17, letterSpacing:1, marginBottom:6 }}>No weight logged yet</div>
               <div style={{ fontSize:12, color:MUTED }}>Enter your weight above to start tracking</div>
             </div>}
+
+            {/* Body Measurements */}
+            <div style={{ ...S.labelRed, marginTop:6 }}>📏 Body Measurements (inches)</div>
+            <div style={S.card}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+                {["chest","waist","hips","arms","thighs"].map(m=>(
+                  <div key={m}>
+                    <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:3 }}>{m.toUpperCase()}</div>
+                    <input style={{ ...S.input, padding:"7px 8px" }} type="number" placeholder="e.g. 36" value={newMeasurement[m]}
+                      onChange={e=>setNewMeasurement(p=>({...p,[m]:e.target.value}))}/>
+                  </div>
+                ))}
+              </div>
+              <button style={S.btnSmRed} onClick={addMeasurement}>Log Measurements</button>
+            </div>
+            {bodyMeasurements.length>0&&<div style={S.card}>
+              <div style={S.label}>Measurement History</div>
+              {[...bodyMeasurements].reverse().slice(0,5).map(m=>(
+                <div key={m.id} style={{ ...S.card2, marginBottom:6 }}>
+                  <div style={{ fontSize:11, color:MUTED, marginBottom:4 }}>{m.date}</div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                    {["chest","waist","hips","arms","thighs"].filter(k=>m[k]).map(k=>(
+                      <span key={k} style={{ fontSize:12 }}><span style={{ color:MUTED }}>{k}: </span><strong>{m[k]}"</strong></span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>}
+
+            {/* Notifications */}
+            <div style={{ ...S.labelRed, marginTop:6 }}>🔔 Reminders</div>
+            <div style={{ ...S.card, borderLeft:`3px solid ${notifEnabled?RED:BORDER}` }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, marginBottom:2 }}>Push Notifications</div>
+                  <div style={{ fontSize:11, color:MUTED, lineHeight:1.5 }}>
+                    {notifEnabled?"Notifications are enabled ✅":"Get reminders to log meals, drink water, and keep your streak."}
+                  </div>
+                </div>
+                {!notifEnabled
+                  ? <button style={{ ...S.btnSmRed, flexShrink:0, marginLeft:10 }} onClick={enableNotifications}>Enable</button>
+                  : <button style={{ ...S.btnSm, flexShrink:0, marginLeft:10 }} onClick={()=>setNotifEnabled(false)}>Disable</button>
+                }
+              </div>
+            </div>
           </>)}
 
           {healthSub==="sleep"&&(<>
@@ -2223,7 +2409,13 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                         <div style={{ fontSize:11, color:RED, fontWeight:600, letterSpacing:0.5 }}>{meal.time}</div>
                         <div style={{ fontSize:13, fontWeight:600, marginTop:1 }}>{meal.name}</div>
                       </div>
-                      <span style={{ fontFamily:"'Bebas Neue'", fontSize:18, color:RED }}>{meal.calories}</span>
+                      <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
+                        <span style={{ fontFamily:"'Bebas Neue'", fontSize:18, color:RED }}>{meal.calories}</span>
+                        <button onClick={()=>addFoodItem({ name:meal.name, calories:meal.calories||0, protein:meal.protein||0, carbs:meal.carbs||0, fat:meal.fat||0, fiber:0, sugar:0, serving:"1 serving", confidence:"high", notes:"From AI meal plan", mealType:meal.time, time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), id:Date.now() })}
+                          style={{ background:"transparent", border:`1px solid ${RED}`, color:RED, fontSize:10, fontFamily:"'DM Sans'", padding:"3px 8px", cursor:"pointer", letterSpacing:0.5 }}>
+                          + Log
+                        </button>
+                      </div>
                     </div>
                     <div style={{ display:"flex", gap:6 }}>
                       {meal.protein&&<span style={S.pill(BLACK)}>P: {meal.protein}g</span>}
