@@ -190,6 +190,8 @@ function CardioChart({ data }) {
     </svg>
   );
 }
+
+function StarRating({ value, onChange, color=RED }) {
   return (
     <div style={{ display:"flex", gap:6 }}>
       {[1,2,3,4,5].map(s=>(
