@@ -2661,11 +2661,13 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                   })}
                 </div>
               </div>
-            : activeSession.exercises.length > 0 && (
-              <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>{ setShowExercisePicker(true); setExerciseSearch(""); }}>
-                + Add Exercise
-              </button>
-            )
+          }
+
+          {activeSession.exercises.length > 0 && !showExercisePicker && (
+            <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>{ setShowExercisePicker(true); setExerciseSearch(""); }}>
+              + Add Exercise
+            </button>
+          )}
 
           {/* Save & Finish */}
           {!showExercisePicker&&<>
