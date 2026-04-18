@@ -20,6 +20,7 @@ const TENJIKU_IMG = "data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX
 // Safe localStorage helpers — work in deployed PWA, fail silently in sandboxed preview
 const lsGet = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
 const lsSet = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 const RANKS = [
   { min:0,  kanji:"新", title:"Newcomer",      sub:"Kouhai",         color:MUTED  },
@@ -634,7 +635,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
                 </div>
             }
             {/* Camera input — opens camera directly */}
-            <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={e=>handleFile(e.target.files[0])}/>
+            <input ref={cameraRef} type="file" accept="image/*" {...(isMobile?{capture:"environment"}:{})} style={{ display:"none" }} onChange={e=>handleFile(e.target.files[0])}/>
             {/* File input — opens photo library */}
             <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>handleFile(e.target.files[0])}/>
 
@@ -2339,7 +2340,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <div style={S.card}>
               <div style={S.labelRed}>📸 Progress Photos</div>
               <div style={{ fontSize:12, color:MUTED, marginBottom:12, lineHeight:1.6 }}>Log a weekly photo to track your visual progress alongside your weight.</div>
-              <input ref={progressPhotoRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }}
+              <input ref={progressPhotoRef} type="file" accept="image/*" {...(isMobile?{capture:"environment"}:{})} style={{ display:"none" }}
                 onChange={e=>{ const file=e.target.files[0]; if(!file) return; const r=new FileReader(); r.onload=ev=>{ addProgressPhoto(ev.target.result.split(",")[1]); }; r.readAsDataURL(file); }}/>
               <div style={{ display:"flex", gap:8 }}>
                 <button style={{ ...S.btn, flex:1 }} onClick={()=>progressPhotoRef.current?.click()}>📷 Take Photo</button>
