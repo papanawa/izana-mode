@@ -486,12 +486,17 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
 
   const lookupBarcode = async (code) => {
     setBarcodeVal(code); setLoading(true); setError(""); setResult(null);
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setError("Lookup timed out. Check your connection and try again.");
+    }, 20000);
     try {
       const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
       const data = await res.json();
       if (data.status===1 && data.product) {
         const p = data.product, n = p.nutriments||{};
         const sg = parseFloat(p.serving_quantity)||100, f = sg/100;
+        clearTimeout(timeout);
         selectResult({
           name: p.product_name||p.product_name_en||"Unknown Product",
           calories: Math.round((n["energy-kcal_100g"]||0)*f),
@@ -513,17 +518,27 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
           });
           const aiData = await aiRes.json();
           const txt = aiData.content?.find(b=>b.type==="text")?.text||"";
+          clearTimeout(timeout);
           selectResult(JSON.parse(txt.replace(/```json|```/g,"").trim()));
         } catch {
+          clearTimeout(timeout);
           setError("Product not found. Try the Search or Photo tab instead.");
+          setLoading(false);
         }
       }
-    } catch { setError("Lookup failed. Check your connection."); }
-    setLoading(false);
+    } catch {
+      clearTimeout(timeout);
+      setError("Lookup failed. Check your connection.");
+      setLoading(false);
+    }
   };
 
   const scanBarcodeFromPhoto = async (base64) => {
     setLoading(true); setError(""); setResult(null); setBarcodeVal(null);
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setError("Request timed out. Check your connection and try again.");
+    }, 20000); // 20 second hard timeout
     try {
       const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:200,
@@ -536,6 +551,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
       const data = await res.json();
       const txt = data.content?.find(b=>b.type==="text")?.text||"";
       const parsed = JSON.parse(txt.replace(/```json|```/g,"").trim());
+      clearTimeout(timeout);
       if (parsed.found && parsed.barcode) {
         await lookupBarcode(parsed.barcode);
       } else {
@@ -543,6 +559,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
         setLoading(false);
       }
     } catch {
+      clearTimeout(timeout);
       setError("Couldn't read barcode from photo. Try again.");
       setLoading(false);
     }
