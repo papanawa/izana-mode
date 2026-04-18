@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   sbSignUp, sbSignIn, sbSignInGoogle, sbSignOut,
   sbGetSessionFromHash, sbRefreshToken,
@@ -1356,7 +1356,6 @@ function MainApp({ user, session, onSignOut }) {
   const [newSleep,setNewSleep]=useState({ hours:"", quality:3, soreness:3 });
   const [planPrefs,setPlanPrefs]=useState({ restrictions:"", dietType:"None" });
   const [showAddFood,setShowAddFood]=useState(false);
-  const [progressPhotoFile,setProgressPhotoFile]=useState(null);
   const progressPhotoRef=useRef();
 
   const today=new Date().toLocaleDateString("en-US",{ weekday:"short", month:"short", day:"numeric" });
@@ -1455,10 +1454,6 @@ function MainApp({ user, session, onSignOut }) {
     }
     return count;
   })();
-  useEffect(()=>lsSet('im_favorites', favorites),[favorites]);
-  useEffect(()=>lsSet('im_sessions', sessions),[sessions]);
-  useEffect(()=>lsSet('im_bodyMetrics', bodyMetrics),[bodyMetrics]);
-  useEffect(()=>lsSet('im_sleepLog', sleepLog),[sleepLog]);
 
   const addFoodItem = (item) => { setFoodLog(p=>[...p, item]); };
   const deleteFoodItem = (id) => { setFoodLog(p=>p.filter(f=>f.id!==id)); };
