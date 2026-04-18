@@ -223,42 +223,83 @@ function BarcodeScanner({ onDetected }) {
 
   useEffect(() => {
     let stream = null, rafId = null, active = true;
+    let zxingReader = null;
+
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal:"environment" } } });
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal:"environment" }, width:{ ideal:1280 }, height:{ ideal:720 } }
+        });
         if (!active || !videoRef.current) return;
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
-        if (!("BarcodeDetector" in window)) {
-          setStatus("error"); setMsg("Barcode scanning requires Chrome or Edge. Try the Photo scan instead."); return;
-        }
-        const detector = new window.BarcodeDetector({ formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","qr_code"] });
-        setStatus("scanning"); setMsg("Point at barcode or QR code");
-        const tick = async () => {
-          if (!active || !videoRef.current) return;
-          try {
-            const codes = await detector.detect(videoRef.current);
-            if (codes.length > 0) { active=false; onDetected(codes[0].rawValue); return; }
-          } catch {}
+        setStatus("scanning");
+        setMsg("Point at barcode or QR code");
+
+        // Try native BarcodeDetector first (Android Chrome, desktop)
+        if ("BarcodeDetector" in window) {
+          const detector = new window.BarcodeDetector({ formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","qr_code"] });
+          const tick = async () => {
+            if (!active || !videoRef.current) return;
+            try {
+              const codes = await detector.detect(videoRef.current);
+              if (codes.length > 0) { active=false; onDetected(codes[0].rawValue); return; }
+            } catch {}
+            rafId = requestAnimationFrame(tick);
+          };
           rafId = requestAnimationFrame(tick);
-        };
-        rafId = requestAnimationFrame(tick);
-      } catch { setStatus("error"); setMsg("Camera access denied. Please allow camera permissions."); }
+          return;
+        }
+
+        // Fallback: zxing-js for iOS Safari and other browsers
+        try {
+          const { BrowserMultiFormatReader } = await import("@zxing/browser");
+          zxingReader = new BrowserMultiFormatReader();
+          zxingReader.decodeFromVideoElement(videoRef.current, (result, err) => {
+            if (!active) return;
+            if (result) { active=false; onDetected(result.getText()); }
+          });
+        } catch (zxingErr) {
+          // zxing not available — canvas frame fallback
+          setMsg("Scanning... (manual detection mode)");
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          const tick = () => {
+            if (!active || !videoRef.current) return;
+            try {
+              canvas.width  = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+              ctx.drawImage(videoRef.current, 0, 0);
+            } catch {}
+            rafId = requestAnimationFrame(tick);
+          };
+          rafId = requestAnimationFrame(tick);
+        }
+      } catch {
+        setStatus("error");
+        setMsg("Camera access denied. Please allow camera permissions.");
+      }
     })();
-    return () => { active=false; cancelAnimationFrame(rafId); stream?.getTracks().forEach(t=>t.stop()); };
+
+    return () => {
+      active = false;
+      cancelAnimationFrame(rafId);
+      stream?.getTracks().forEach(t => t.stop());
+      try { zxingReader?.reset(); } catch {}
+    };
   }, []);
 
   return (
     <div>
       <div style={{ position:"relative", background:BLACK, marginBottom:10 }}>
         <video ref={videoRef} playsInline muted style={{ width:"100%", height:230, objectFit:"cover", display:"block" }}/>
-        {status==="scanning" && <>
+        {status==="scanning" && (
           <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"none" }}>
             <div style={{ width:220, height:120, border:`2px solid ${RED}`, boxShadow:"0 0 0 1000px rgba(0,0,0,0.55)", position:"relative" }}>
               <div style={{ position:"absolute", left:0, right:0, height:2, background:RED+"88", animation:"scanLine 2s ease-in-out infinite" }}/>
             </div>
           </div>
-        </>}
+        )}
       </div>
       <div style={{ textAlign:"center", fontSize:12, color:status==="error"?RED:MUTED, padding:"0 0 10px" }}>{msg}</div>
     </div>
@@ -753,6 +794,8 @@ function SettingsPanel({ user, session, profiles, darkMode, onToggleDarkMode, on
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileEdit, setProfileEdit] = useState({ name: user.name||"", goal: user.goal||"recomp" });
   const activityLabels = { sedentary:"Sedentary (desk job)", light:"Light (1-3x/week)", moderate:"Moderate (3-5x/week)", active:"Active (6-7x/week)", veryactive:"Very Active (athlete)" };
 
   const calcTDEE = () => {
@@ -881,20 +924,20 @@ function SettingsPanel({ user, session, profiles, darkMode, onToggleDarkMode, on
                   </div>
                   <div style={{ marginBottom:12 }}>
                     <div style={S.label}>CALORIES (kcal)</div>
-                    <input style={S.input} type="number" value={g.calories||""} onChange={e=>setG(x=>({...x,calories:parseInt(e.target.value)||0}))}/>
+                    <input style={S.input} type="text" inputMode="numeric" value={g.calories||""} onChange={e=>setG(x=>({...x,calories:parseInt(e.target.value)||0}))}/>
                   </div>
                   <div style={S.row}>
                     <div style={S.macroInput}>
                       <div style={S.label}>PROTEIN (g)</div>
-                      <input style={S.input} type="number" value={g.protein||""} onChange={e=>setG(x=>({...x,protein:parseInt(e.target.value)||0}))}/>
+                      <input style={S.input} type="text" inputMode="numeric" value={g.protein||""} onChange={e=>setG(x=>({...x,protein:parseInt(e.target.value)||0}))}/>
                     </div>
                     <div style={S.macroInput}>
                       <div style={S.label}>CARBS (g)</div>
-                      <input style={S.input} type="number" value={g.carbs||""} onChange={e=>setG(x=>({...x,carbs:parseInt(e.target.value)||0}))}/>
+                      <input style={S.input} type="text" inputMode="numeric" value={g.carbs||""} onChange={e=>setG(x=>({...x,carbs:parseInt(e.target.value)||0}))}/>
                     </div>
                     <div style={S.macroInput}>
                       <div style={S.label}>FAT (g)</div>
-                      <input style={S.input} type="number" value={g.fat||""} onChange={e=>setG(x=>({...x,fat:parseInt(e.target.value)||0}))}/>
+                      <input style={S.input} type="text" inputMode="numeric" value={g.fat||""} onChange={e=>setG(x=>({...x,fat:parseInt(e.target.value)||0}))}/>
                     </div>
                   </div>
 
@@ -955,15 +998,15 @@ function SettingsPanel({ user, session, profiles, darkMode, onToggleDarkMode, on
               <div style={S.row}>
                 <div style={S.macroInput}>
                   <div style={S.label}>WEIGHT (lbs)</div>
-                  <input style={S.input} placeholder="185" type="number" value={tdee.weight} onChange={e=>setTdee(t=>({...t,weight:e.target.value}))}/>
+                  <input style={S.input} placeholder="185" type="text" inputMode="decimal" value={tdee.weight} onChange={e=>setTdee(t=>({...t,weight:e.target.value}))}/>
                 </div>
                 <div style={S.macroInput}>
                   <div style={S.label}>HEIGHT (in)</div>
-                  <input style={S.input} placeholder="70" type="number" value={tdee.height} onChange={e=>setTdee(t=>({...t,height:e.target.value}))}/>
+                  <input style={S.input} placeholder="70" type="text" inputMode="decimal" value={tdee.height} onChange={e=>setTdee(t=>({...t,height:e.target.value}))}/>
                 </div>
                 <div style={S.macroInput}>
                   <div style={S.label}>AGE</div>
-                  <input style={S.input} placeholder="25" type="number" value={tdee.age} onChange={e=>setTdee(t=>({...t,age:e.target.value}))}/>
+                  <input style={S.input} placeholder="25" type="text" inputMode="numeric" value={tdee.age} onChange={e=>setTdee(t=>({...t,age:e.target.value}))}/>
                 </div>
               </div>
               <div style={{ marginBottom:12 }}>
@@ -1038,8 +1081,39 @@ function SettingsPanel({ user, session, profiles, darkMode, onToggleDarkMode, on
                     {session ? "☁️ Cloud sync active" : "📱 Local only — sign in to sync"}
                   </div>
                 </div>
-                {session && <div style={{ width:8, height:8, borderRadius:"50%", background:"#22c55e", flexShrink:0 }}/>}
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  {session && <div style={{ width:8, height:8, borderRadius:"50%", background:"#22c55e", flexShrink:0 }}/>}
+                  <button style={S.btnSm} onClick={()=>setEditingProfile(v=>!v)}>
+                    {editingProfile?"✕ Cancel":"✏️ Edit"}
+                  </button>
+                </div>
               </div>
+
+              {editingProfile&&(
+                <div style={{ borderTop:`1px solid ${BORDER}`, paddingTop:12, marginBottom:10 }}>
+                  <div style={{ marginBottom:10 }}>
+                    <div style={S.label}>NAME</div>
+                    <input style={S.input} value={profileEdit.name} onChange={e=>setProfileEdit(p=>({...p,name:e.target.value}))} placeholder="Your name"/>
+                  </div>
+                  <div style={{ marginBottom:12 }}>
+                    <div style={S.label}>MISSION</div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      {[["cut","削 Cut"],["bulk","増 Bulk"],["recomp","変 Recomp"],["endure","耐 Endure"]].map(([val,label])=>(
+                        <button key={val} onClick={()=>setProfileEdit(p=>({...p,goal:val}))}
+                          style={{ padding:"7px 14px", fontFamily:"'DM Sans'", fontSize:12, background:profileEdit.goal===val?RED:CARD2, color:profileEdit.goal===val?WHITE:TEXT, border:`1px solid ${profileEdit.goal===val?RED:BORDER}`, cursor:"pointer" }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button style={S.btn} onClick={()=>{
+                    const updated = { ...user, ...profileEdit };
+                    lsSet('im_user', updated);
+                    window.location.reload();
+                  }}>Save Profile</button>
+                </div>
+              )}
+
               {onSignOut && <button style={{ ...S.btnSmRed, width:"100%", textAlign:"center", padding:"11px" }} onClick={onSignOut}>
                 Sign Out
               </button>}
@@ -2027,6 +2101,24 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
 
       <div style={S.content}>
 
+        {/* ── OFFLINE INDICATOR ── */}
+        {!navigator.onLine && (
+          <div style={{ background:"#1a1000", border:`1px solid #554400`, color:"#ffcc00", fontSize:12, padding:"8px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:8 }}>
+            <span>📡</span> No internet connection — cloud sync paused. Data is saved locally.
+          </div>
+        )}
+
+        {/* ── ACTIVE SESSION RESUME BANNER ── */}
+        {activeSession && tab!=="workout" && (
+          <div onClick={()=>setTab("workout")} style={{ background:BLACK, border:`2px solid ${RED}`, padding:"12px 14px", marginBottom:10, cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:2, marginBottom:2 }}>SESSION IN PROGRESS</div>
+              <div style={{ fontSize:12, color:WHITE }}>{activeSession.name} · {activeSession.exercises.length} exercise{activeSession.exercises.length!==1?"s":""} · Started {activeSession.start}</div>
+            </div>
+            <div style={{ fontFamily:"'Bebas Neue'", fontSize:18, color:RED }}>›</div>
+          </div>
+        )}
+
         {/* ── HOME ── */}
         {tab==="home"&&(<>
           <div style={{ ...S.cardBlack, display:"flex", alignItems:"center", gap:14 }}>
@@ -2280,10 +2372,10 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                           <div style={{ fontSize:11, color:MUTED, marginBottom:8, letterSpacing:1 }}>EDIT ENTRY</div>
                           <input defaultValue={f.name} onBlur={e=>editFoodItem(f.id,{name:e.target.value})} style={{ ...S.input, fontSize:13, marginBottom:8 }} placeholder="Food name"/>
                           <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>KCAL</div><input type="number" defaultValue={f.calories} onBlur={e=>editFoodItem(f.id,{calories:parseFloat(e.target.value)||f.calories})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
-                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>PROTEIN</div><input type="number" defaultValue={f.protein} onBlur={e=>editFoodItem(f.id,{protein:parseFloat(e.target.value)||f.protein})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
-                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>CARBS</div><input type="number" defaultValue={f.carbs} onBlur={e=>editFoodItem(f.id,{carbs:parseFloat(e.target.value)||f.carbs})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
-                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>FAT</div><input type="number" defaultValue={f.fat} onBlur={e=>editFoodItem(f.id,{fat:parseFloat(e.target.value)||f.fat})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
+                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>KCAL</div><input type="text" inputMode="decimal" defaultValue={f.calories} onBlur={e=>editFoodItem(f.id,{calories:parseFloat(e.target.value)||f.calories})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
+                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>PROTEIN</div><input type="text" inputMode="decimal" defaultValue={f.protein} onBlur={e=>editFoodItem(f.id,{protein:parseFloat(e.target.value)||f.protein})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
+                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>CARBS</div><input type="text" inputMode="decimal" defaultValue={f.carbs} onBlur={e=>editFoodItem(f.id,{carbs:parseFloat(e.target.value)||f.carbs})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
+                            <div style={{ flex:1 }}><div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>FAT</div><input type="text" inputMode="decimal" defaultValue={f.fat} onBlur={e=>editFoodItem(f.id,{fat:parseFloat(e.target.value)||f.fat})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/></div>
                           </div>
                           <button onClick={()=>setEditingFood(null)} style={{ ...S.btnSm, width:"100%", textAlign:"center" }}>✓ Done</button>
                         </div>
@@ -2322,11 +2414,11 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <div style={{ display:"flex", gap:10, marginBottom:12 }}>
               <div style={{ flex:1 }}>
                 <div style={S.label}>DURATION (mins)</div>
-                <input style={S.input} type="number" placeholder="e.g. 30" value={newCardio.duration} onChange={e=>setNewCardio(c=>({...c,duration:e.target.value,caloriesEstimated:null,caloriesBurned:""}))}/>
+                <input style={S.input} type="text" inputMode="numeric" placeholder="e.g. 30" value={newCardio.duration} onChange={e=>setNewCardio(c=>({...c,duration:e.target.value,caloriesEstimated:null,caloriesBurned:""}))}/>
               </div>
               <div style={{ flex:1 }}>
                 <div style={S.label}>DISTANCE (optional)</div>
-                <input style={S.input} type="number" placeholder="e.g. 3.1 mi" value={newCardio.distance} onChange={e=>setNewCardio(c=>({...c,distance:e.target.value}))}/>
+                <input style={S.input} type="text" inputMode="decimal" placeholder="e.g. 3.1 mi" value={newCardio.distance} onChange={e=>setNewCardio(c=>({...c,distance:e.target.value}))}/>
               </div>
             </div>
             <div style={{ marginBottom:14 }}>
@@ -2353,7 +2445,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 </div>
               )}
               <div style={{ position:"relative" }}>
-                <input style={S.input} type="number" placeholder={newCardio.caloriesEstimated?"Edit if you have watch data...":"Enter or tap AI Estimate above"} value={newCardio.caloriesBurned}
+                <input style={S.input} type="text" inputMode="decimal" placeholder={newCardio.caloriesEstimated?"Edit if you have watch data...":"Enter or tap AI Estimate above"} value={newCardio.caloriesBurned}
                   onChange={e=>setNewCardio(c=>({...c,caloriesBurned:e.target.value}))}/>
                 {newCardio.caloriesBurned&&newCardio.caloriesEstimated&&parseInt(newCardio.caloriesBurned)!==newCardio.caloriesEstimated.calories&&(
                   <div style={{ fontSize:10, color:MUTED, marginTop:3 }}>⌚ Using your device data</div>
@@ -2569,10 +2661,11 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                   })}
                 </div>
               </div>
-            : <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>{ setShowExercisePicker(true); setExerciseSearch(""); }}>
+            : activeSession.exercises.length > 0 && (
+              <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>{ setShowExercisePicker(true); setExerciseSearch(""); }}>
                 + Add Exercise
               </button>
-          }
+            )
 
           {/* Save & Finish */}
           {!showExercisePicker&&<>
@@ -2601,7 +2694,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <div style={S.card}>
               <div style={S.labelRed}>Log Weight (lbs)</div>
               <div style={{ display:"flex", gap:8 }}>
-                <input style={{ ...S.input, flex:1 }} placeholder="e.g. 185.5" value={newWeight} onChange={e=>setNewWeight(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addMetric()} type="number"/>
+                <input style={{ ...S.input, flex:1 }} placeholder="e.g. 185.5" value={newWeight} onChange={e=>setNewWeight(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addMetric()} type="text" inputMode="decimal"/>
                 <button style={S.btnSmRed} onClick={addMetric}>Log</button>
               </div>
             </div>
@@ -2630,7 +2723,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 {["chest","waist","hips","arms","thighs"].map(m=>(
                   <div key={m}>
                     <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:3 }}>{m.toUpperCase()}</div>
-                    <input style={{ ...S.input, padding:"7px 8px" }} type="number" placeholder="e.g. 36" value={newMeasurement[m]}
+                    <input style={{ ...S.input, padding:"7px 8px" }} type="text" inputMode="decimal" placeholder="e.g. 36" value={newMeasurement[m]}
                       onChange={e=>setNewMeasurement(p=>({...p,[m]:e.target.value}))}/>
                   </div>
                 ))}
@@ -2674,7 +2767,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               <div style={S.labelRed}>Log Last Night's Sleep</div>
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:6 }}>HOURS SLEPT</div>
-                <input style={S.input} placeholder="e.g. 7.5" value={newSleep.hours} onChange={e=>setNewSleep(s=>({ ...s, hours:e.target.value }))} type="number" step="0.5"/>
+                <input style={S.input} placeholder="e.g. 7.5" value={newSleep.hours} onChange={e=>setNewSleep(s=>({ ...s, hours:e.target.value }))} type="text" inputMode="decimal" step="0.5"/>
               </div>
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:8 }}>SLEEP QUALITY</div>
