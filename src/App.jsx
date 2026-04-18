@@ -547,6 +547,8 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
       setLoading(false);
     }
   };
+
+  const analyzePhoto = async () => {
     if (!imgBase64) return;
     setLoading(true); setError(""); setResult(null);
     try {
@@ -784,7 +786,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
             {/* Hidden file input for barcode photo on iOS */}
             <input ref={barcodePhotoRef} type="file" accept="image/*"
               {...(isMobile?{capture:"environment"}:{})} style={{ display:"none" }}
-              onChange={e=>{ const file=e.target.files[0]; if(!file) return;
+              onChange={async e=>{ const file=e.target.files[0]; if(!file) return;
                 const r=new FileReader(); r.onload=ev=>scanBarcodeFromPhoto(ev.target.result.split(",")[1]); r.readAsDataURL(file); }}/>
 
             {/* If no result yet, show scanner or photo option */}
