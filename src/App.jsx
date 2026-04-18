@@ -1475,7 +1475,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [showSettings,setShowSettings]=useState(false);
   const [rankNotif,setRankNotif]=useState(null);
   const [prevScore,setPrevScore]=useState(()=>lsGet('im_prevScore',0));
-  const [activeSession,setActiveSession]=useState(null);
+  const [activeSession,setActiveSession]=useState(()=>lsGet('im_activeSession',null));
   const [saveWorkoutName,setSaveWorkoutName]=useState("");
   const [showSaveWorkout,setShowSaveWorkout]=useState(false);
   const [newCardio,setNewCardio]=useState({ type:"Run", duration:"", distance:"", effort:3, caloriesBurned:"", caloriesEstimated:null, estimatingCals:false });
@@ -1521,6 +1521,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   useEffect(()=>lsSet('im_customWorkouts', customWorkouts),[customWorkouts]);
   useEffect(()=>lsSet('im_progressPhotos', progressPhotos),[progressPhotos]);
   useEffect(()=>lsSet('im_cardioLog', cardioLog),[cardioLog]);
+  useEffect(()=>{ if(activeSession) lsSet('im_activeSession',activeSession); else { try { localStorage.removeItem('im_activeSession'); } catch {} } },[activeSession]);
   useEffect(()=>lsSet('im_bodyMeasurements', bodyMeasurements),[bodyMeasurements]);
   useEffect(()=>lsSet('im_notifEnabled', notifEnabled),[notifEnabled]);
 
@@ -1683,7 +1684,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const handleReset = () => {
     const keys = ['im_foodLog','im_favorites','im_sessions','im_bodyMetrics','im_sleepLog',
                   'im_customWorkouts','im_progressPhotos','im_waterLog','im_prevScore',
-                  'im_user','oja_goals','oja_profiles','im_cardioLog'];
+                  'im_user','oja_goals','oja_profiles','im_cardioLog','im_activeSession'];
     keys.forEach(k=>{ try { localStorage.removeItem(k); } catch {} });
     window.location.reload();
   };
@@ -1757,7 +1758,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
     setNewSleep({ hours:"", quality:3, soreness:3 });
   };
 
-  const startWorkout=(t)=>{ setShowExercisePicker(false); setExerciseSearch(""); setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises:t.exercises.map(n=>({ name:n, sets:[{reps:"",weight:""}] })) }); };
+  const startWorkout=(t)=>{ setShowExercisePicker(false); setExerciseSearch(""); setTab("workout"); setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises:t.exercises.map(n=>({ name:n, sets:[{reps:"",weight:""}] })) }); };
   const addSet=(ei)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i===ei?{ ...ex, sets:[...ex.sets,{reps:"",weight:""}] }:ex) }));
   const updateSet=(ei,si,f,v)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st,[f]:v }) }) }));
   const addCustomEx=()=>{ if(!newExName.trim()) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:newExName.trim(), sets:[{reps:"",weight:""}] }] })); setNewExName(""); };
@@ -2239,7 +2240,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               <button key={w.id} onClick={()=>startWorkout(w)}
                 style={{ background:CARD, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left" }}>
                 <div style={{ fontFamily:"'Bebas Neue'", fontSize:16, letterSpacing:1, color:TEXT }}>{w.name}</div>
-                <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{w.exercises.length} exercises</div>
+                <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{w.exercises.length} exercises · tap to load</div>
               </button>
             ))}
           </div>
