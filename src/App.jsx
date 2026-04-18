@@ -522,7 +522,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
     modeTab: (a) => ({ flex:1, padding:"10px 4px 8px", fontFamily:"'Bebas Neue'", fontSize:12, letterSpacing:1.5,
       color:a?RED:"#555", background:"transparent", border:"none", borderBottom:`2px solid ${a?RED:"transparent"}`, cursor:"pointer" }),
     card: { background:CARD, border:`1px solid ${BORDER}`, borderLeft:`3px solid ${RED}`, padding:"12px", marginBottom:8 },
-    input: { background:WHITE, color:TEXT, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, borderRadius:0, padding:"9px 10px", fontSize:13, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none" },
+    input: { background:"#F5F4F2", color:"#111111", border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, borderRadius:0, padding:"9px 10px", fontSize:13, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none" },
     btn: { background:RED, color:WHITE, border:"none", borderRadius:0, padding:"12px 16px", fontSize:13, fontWeight:600, fontFamily:"'DM Sans'", cursor:"pointer", width:"100%", letterSpacing:1, textTransform:"uppercase" },
     btnSm: { background:CARD2, color:TEXT, border:`1px solid ${BORDER}`, borderRadius:0, padding:"6px 12px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer" },
     btnSmRed: { background:"transparent", color:RED, border:`1px solid ${RED}`, borderRadius:0, padding:"6px 12px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer" },
@@ -812,7 +812,7 @@ function SettingsPanel({ user, session, profiles, darkMode, onToggleDarkMode, on
     body:      { overflowY:"auto", padding:"16px 16px 40px", flex:1 },
     label:     { fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:6 },
     labelRed:  { fontFamily:"'Bebas Neue'", fontSize:12, color:RED, letterSpacing:2, marginBottom:10, borderBottom:`1px solid ${RED}44`, paddingBottom:5 },
-    input:     { background:WHITE, color:TEXT, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, borderRadius:0, padding:"9px 10px", fontSize:13, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none" },
+    input:     { background:"#F5F4F2", color:"#111111", border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, borderRadius:0, padding:"9px 10px", fontSize:13, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none" },
     row:       { display:"flex", gap:10, marginBottom:14 },
     card:      { background:CARD, border:`1px solid ${BORDER}`, borderLeft:`3px solid ${RED}`, padding:"14px", marginBottom:10 },
     cardBlack: { background:BLACK, border:`1px solid #333`, borderLeft:`3px solid ${RED}`, padding:"12px 14px", marginBottom:10 },
@@ -1333,23 +1333,23 @@ function Onboarding({ onComplete }) {
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
             <div>
               <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>AGE</div>
-              <input value={stats.age} onChange={e=>setStats(s=>({...s,age:e.target.value}))} placeholder="e.g. 28" type="number"
+              <input value={stats.age} onChange={e=>setStats(s=>({...s,age:e.target.value}))} placeholder="e.g. 28" type="text" inputMode="numeric" pattern="[0-9]*"
                 style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.age?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
             </div>
             <div>
               <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>WEIGHT (lbs)</div>
-              <input value={stats.weightLbs} onChange={e=>setStats(s=>({...s,weightLbs:e.target.value}))} placeholder="e.g. 185" type="number"
+              <input value={stats.weightLbs} onChange={e=>setStats(s=>({...s,weightLbs:e.target.value}))} placeholder="e.g. 185" type="text" inputMode="decimal" pattern="[0-9]*"
                 style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.weightLbs?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
             </div>
             <div>
               <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>HEIGHT (ft)</div>
-              <input value={stats.heightFt} onChange={e=>setStats(s=>({...s,heightFt:e.target.value}))} placeholder="e.g. 5" type="number"
+              <input value={stats.heightFt} onChange={e=>setStats(s=>({...s,heightFt:e.target.value}))} placeholder="e.g. 5" type="text" inputMode="numeric" pattern="[0-9]*"
                 style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.heightFt?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
             </div>
             <div>
               <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>HEIGHT (in)</div>
-              <input value={stats.heightIn} onChange={e=>setStats(s=>({...s,heightIn:e.target.value}))} placeholder="e.g. 10" type="number"
-                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid `+BORDER, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
+              <input value={stats.heightIn} onChange={e=>setStats(s=>({...s,heightIn:e.target.value}))} placeholder="e.g. 10" type="text" inputMode="numeric" pattern="[0-9]*"
+                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.heightIn?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
             </div>
           </div>
           {/* Sex */}
@@ -1770,7 +1770,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
     btnBlack:  { background:BLACK, color:WHITE, border:`1.5px solid ${BLACK}`, borderRadius:0, padding:"11px 20px", fontSize:13, fontWeight:600, fontFamily:"'DM Sans'", cursor:"pointer", width:"100%", letterSpacing:1, textTransform:"uppercase" },
     btnSm:     { background:CARD2, color:TEXT, border:`1px solid ${BORDER}`, borderRadius:0, padding:"6px 10px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer" },
     btnSmRed:  { background:"transparent", color:RED, border:`1px solid ${RED}`, borderRadius:0, padding:"6px 12px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer", letterSpacing:1 },
-    input:     { background:WHITE, color:TEXT, border:`1px solid ${BORDER}`, borderRadius:0, padding:"9px 10px", fontSize:13, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none", borderBottom:`2px solid ${RED}` },
+    input:     { background:"#F5F4F2", color:"#111111", border:`1px solid ${BORDER}`, borderRadius:0, padding:"9px 10px", fontSize:13, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none", borderBottom:`2px solid ${RED}` },
     tab:    (a)=>({ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"9px 0 5px", cursor:"pointer", gap:2, background:a?BLACK:"transparent", border:"none", borderTopWidth:2, borderTopColor:a?RED:"transparent", borderTopStyle:"solid" }),
     tabLabel:  (a)=>({ fontSize:9, fontFamily:"'Bebas Neue'", color:a?RED:MUTED, letterSpacing:1.2 }),
     nav:       { position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:420, background:CARD, borderTop:`2px solid ${BLACK}`, display:"flex", zIndex:100, paddingBottom:4 },
