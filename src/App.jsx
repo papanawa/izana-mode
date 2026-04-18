@@ -444,6 +444,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
   const [imgPreview, setImgPreview] = useState(null);
   const [imgBase64, setImgBase64] = useState(null);
   const [barcodeVal, setBarcodeVal] = useState(null);
+  const [barcodeDetected, setBarcodeDetected] = useState(null); // { code, imgBase64 } — pending confirmation
   const [showWebcam, setShowWebcam] = useState(false);
   const [mealType, setMealType] = useState(() => {
     const h = new Date().getHours();
@@ -534,17 +535,23 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
   };
 
   const scanBarcodeFromPhoto = async (base64) => {
-    setLoading(true); setError(""); setResult(null); setBarcodeVal(null);
+    setLoading(true); setError(""); setResult(null); setBarcodeVal(null); setBarcodeDetected(null);
     const timeout = setTimeout(() => {
       setLoading(false);
       setError("Request timed out. Check your connection and try again.");
-    }, 20000); // 20 second hard timeout
+    }, 25000);
     try {
       const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:200,
+        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:300,
           messages:[{ role:"user", content:[
             { type:"image", source:{ type:"base64", media_type:"image/jpeg", data:base64 }},
-            { type:"text", text:`Look at this image and find the barcode or QR code. Extract the numeric barcode value exactly as printed. Respond ONLY with valid JSON (no markdown): {"barcode":"the exact barcode number","found":true} or {"found":false} if no barcode visible.` }
+            { type:"text", text:`This is a photo of a food product or its barcode. Your job:
+1. Find the barcode (UPC-A is 12 digits, EAN-13 is 13 digits, usually at the bottom of packaging with black bars). Read the digits EXACTLY as printed under the bars.
+2. Also look for the product name on the packaging.
+Respond ONLY with valid JSON (no markdown):
+{"barcode_found":true,"barcode":"exact digits here","product_name":"name if visible or null"} 
+OR {"barcode_found":false,"product_name":"name if visible or null"}
+Be very precise with barcode digits — do not guess or approximate.` }
           ]}]
         })
       });
@@ -552,15 +559,43 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
       const txt = data.content?.find(b=>b.type==="text")?.text||"";
       const parsed = JSON.parse(txt.replace(/```json|```/g,"").trim());
       clearTimeout(timeout);
-      if (parsed.found && parsed.barcode) {
-        await lookupBarcode(parsed.barcode);
-      } else {
-        setError("No barcode found in photo. Try getting closer or better lighting.");
+      if (parsed.barcode_found && parsed.barcode) {
+        // Show confirm step before lookup
+        setBarcodeDetected({ code: parsed.barcode, productName: parsed.product_name, imgBase64: base64 });
         setLoading(false);
+      } else {
+        // No barcode found — try reading nutrition label visually
+        await analyzeBarcodeLabelVisually(base64, parsed.product_name);
       }
     } catch {
       clearTimeout(timeout);
-      setError("Couldn't read barcode from photo. Try again.");
+      setError("Couldn't read the photo. Try better lighting or get closer to the barcode.");
+      setLoading(false);
+    }
+  };
+
+  const analyzeBarcodeLabelVisually = async (base64, productName) => {
+    setLoading(true);
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setError("Analysis timed out. Try again or use Search.");
+    }, 25000);
+    try {
+      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:600,
+          messages:[{ role:"user", content:[
+            { type:"image", source:{ type:"base64", media_type:"image/jpeg", data:base64 }},
+            { type:"text", text:`This is a food product photo. ${productName?`The product appears to be "${productName}".`:""} No barcode was readable. Instead, look for a Nutrition Facts panel or use the product name/packaging to estimate nutrition. Respond ONLY with valid JSON (no markdown): {"name":"product name","calories":number,"protein":number,"carbs":number,"fat":number,"fiber":number,"sugar":number,"serving":"serving size","confidence":"medium/low","notes":"brief explanation"}` }
+          ]}]
+        })
+      });
+      const data = await res.json();
+      const txt = data.content?.find(b=>b.type==="text")?.text||"";
+      clearTimeout(timeout);
+      selectResult(JSON.parse(txt.replace(/```json|```/g,"").trim()));
+    } catch {
+      clearTimeout(timeout);
+      setError("Couldn't identify product. Try Search or type the food name manually.");
       setLoading(false);
     }
   };
@@ -800,20 +835,27 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
 
           {/* ── BARCODE MODE ── */}
           {mode==="barcode" && (<>
-            {/* Hidden file input for barcode photo on iOS */}
             <input ref={barcodePhotoRef} type="file" accept="image/*"
               {...(isMobile?{capture:"environment"}:{})} style={{ display:"none" }}
               onChange={async e=>{ const file=e.target.files[0]; if(!file) return;
                 const r=new FileReader(); r.onload=ev=>scanBarcodeFromPhoto(ev.target.result.split(",")[1]); r.readAsDataURL(file); }}/>
 
-            {/* If no result yet, show scanner or photo option */}
-            {!barcodeVal && !loading && !result && (<>
+            {/* Initial scan screen */}
+            {!barcodeVal && !loading && !result && !barcodeDetected && (<>
               {isMobile
                 ? <div style={{ textAlign:"center", padding:"10px 0" }}>
                     <div style={{ fontSize:40, marginBottom:12 }}>📷</div>
                     <div style={{ fontFamily:"'Bebas Neue'", fontSize:18, letterSpacing:1, marginBottom:6 }}>Scan Barcode</div>
-                    <div style={{ fontSize:12, color:MUTED, marginBottom:20, lineHeight:1.6 }}>
-                      Take a photo of the barcode — Claude will read it and look up the product automatically.
+                    <div style={{ fontSize:12, color:MUTED, marginBottom:8, lineHeight:1.6 }}>
+                      Take a clear photo of the barcode — flat, well-lit, close up.
+                    </div>
+                    <div style={{ background:BLACK, padding:"10px 14px", marginBottom:16, textAlign:"left" }}>
+                      <div style={{ fontSize:11, color:MUTED, lineHeight:1.8 }}>
+                        ✓ Hold phone parallel to barcode<br/>
+                        ✓ Get within 6-8 inches<br/>
+                        ✓ Make sure all digits are visible<br/>
+                        ✓ Avoid glare and shadows
+                      </div>
                     </div>
                     <button style={S.btn} onClick={()=>barcodePhotoRef.current?.click()}>
                       📸 Take Barcode Photo
@@ -824,24 +866,68 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
               }
             </>)}
 
+            {/* Loading */}
             {loading && (
               <div style={{ textAlign:"center", padding:"30px 0" }}>
-                <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:2, color:MUTED, marginBottom:8 }}>
-                  {barcodeVal ? `🔍 Looking up barcode ${barcodeVal}...` : "⚡ Reading barcode..."}
+                <YinYang size={40} style={{ margin:"0 auto 14px", mixBlendMode:"multiply" }} className="spin-slow"/>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:14, letterSpacing:2, color:MUTED }}>
+                  {barcodeVal ? "Looking up product..." : "Reading barcode..."}
+                </div>
+                <div style={{ fontSize:11, color:MUTED, marginTop:6 }}>This may take a few seconds</div>
+              </div>
+            )}
+
+            {/* Confirm detected barcode before lookup */}
+            {barcodeDetected && !loading && !result && (
+              <div>
+                <div style={{ ...S.card, borderLeft:`3px solid ${RED}`, marginBottom:10 }}>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:12, color:RED, letterSpacing:2, marginBottom:8 }}>✓ BARCODE DETECTED</div>
+                  {barcodeDetected.productName && (
+                    <div style={{ fontSize:13, fontWeight:600, marginBottom:8 }}>Looks like: {barcodeDetected.productName}</div>
+                  )}
+                  <div style={{ fontSize:11, color:MUTED, marginBottom:6 }}>Check the number below — edit if any digits look wrong:</div>
+                  <input
+                    style={{ ...S.input, fontFamily:"'Bebas Neue'", fontSize:22, letterSpacing:4, textAlign:"center", marginBottom:12 }}
+                    value={barcodeDetected.code}
+                    onChange={e=>setBarcodeDetected(d=>({...d, code:e.target.value}))}
+                    inputMode="numeric"
+                  />
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button style={{ ...S.btn, flex:1 }} onClick={()=>lookupBarcode(barcodeDetected.code)}>
+                      🔍 Look Up Product
+                    </button>
+                    <button style={{ ...S.btnSm, flexShrink:0 }} onClick={()=>{ setBarcodeDetected(null); setError(""); }}>
+                      Retake
+                    </button>
+                  </div>
+                </div>
+                <div style={{ textAlign:"center" }}>
+                  <button style={{ background:"transparent", border:"none", color:MUTED, fontSize:11, cursor:"pointer", textDecoration:"underline", padding:"8px" }}
+                    onClick={()=>{ analyzeBarcodeLabelVisually(barcodeDetected.imgBase64, barcodeDetected.productName); setBarcodeDetected(null); }}>
+                    Skip barcode — read nutrition label visually instead
+                  </button>
                 </div>
               </div>
             )}
-            {error && <div style={{ fontSize:12, color:RED, marginBottom:12, textAlign:"center", padding:"10px 0" }}>{error}
-              <div style={{ marginTop:10 }}>
-                <button style={S.btnSm} onClick={()=>{ setError(""); setBarcodeVal(null); }}>Try Again</button>
+
+            {/* Error */}
+            {error && !loading && (
+              <div style={{ fontSize:12, color:RED, textAlign:"center", padding:"10px 0" }}>
+                {error}
+                <div style={{ marginTop:10, display:"flex", gap:8, justifyContent:"center" }}>
+                  <button style={S.btnSm} onClick={()=>{ setError(""); setBarcodeVal(null); setBarcodeDetected(null); }}>Try Again</button>
+                  {barcodeDetected && <button style={S.btnSm} onClick={()=>analyzeBarcodeLabelVisually(barcodeDetected.imgBase64, barcodeDetected.productName)}>Read Label Instead</button>}
+                </div>
               </div>
-            </div>}
+            )}
+
+            {/* Result */}
             {result && (
               <ResultCard
                 result={result} quantity={quantity} onQuantityChange={setQuantity}
                 onAdd={(entry)=>{ quickAdd(entry); onClose(); }}
                 extraBtn={<button style={{ background:CARD2, color:TEXT, border:`1px solid ${BORDER}`, borderRadius:0, padding:"0 14px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer" }}
-                  onClick={()=>{ setBarcodeVal(null); setResult(null); setError(""); setQuantity(1); }}>Rescan</button>}
+                  onClick={()=>{ setBarcodeVal(null); setBarcodeDetected(null); setResult(null); setError(""); setQuantity(1); }}>Rescan</button>}
               />
             )}
           </>)}
