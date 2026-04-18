@@ -620,7 +620,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
 }
 
 /* ── SETTINGS PANEL ──────────────────────────────── */
-function SettingsPanel({ user, profiles, onSaveProfiles, onClose }) {
+function SettingsPanel({ user, profiles, onSaveProfiles, onReset, onExport, onClose }) {
   const activeProfile  = profiles.find(p=>p.isActive) || profiles[0];
   const [editing, setEditing]   = useState(activeProfile?.id || null);
   const [showNew, setShowNew]   = useState(false);
@@ -631,7 +631,7 @@ function SettingsPanel({ user, profiles, onSaveProfiles, onClose }) {
   const [tdeeResult, setTdeeResult] = useState(null);
   const [dietSuggest, setDietSuggest] = useState(null); // { diet, calories, protein, carbs, fat }
 
-  const activityMultipliers = { sedentary:1.2, light:1.375, moderate:1.55, active:1.725, veryactive:1.9 };
+  const [confirmReset, setConfirmReset] = useState(false);
   const activityLabels = { sedentary:"Sedentary (desk job)", light:"Light (1-3x/week)", moderate:"Moderate (3-5x/week)", active:"Active (6-7x/week)", veryactive:"Very Active (athlete)" };
 
   const calcTDEE = () => {
@@ -889,6 +889,46 @@ function SettingsPanel({ user, profiles, onSaveProfiles, onClose }) {
               )}
             </div>
           )}
+
+          {/* ── MY DATA ── */}
+          <div style={{ marginTop:8 }}>
+            <div style={S.labelRed}>🗂️ MY DATA</div>
+            <div style={{ ...S.card, borderLeft:`3px solid ${BORDER}` }}>
+              <div style={{ fontSize:12, color:MUTED, marginBottom:14, lineHeight:1.6 }}>
+                Export a full copy of your data, or wipe everything and start fresh.
+              </div>
+
+              {/* Export */}
+              <button style={{ ...S.btn, background:BLACK, marginBottom:10 }} onClick={onExport}>
+                📥 Export My Data
+              </button>
+
+              {/* Reset */}
+              {!confirmReset
+                ? <button style={{ ...S.btnSmRed, width:"100%", textAlign:"center", padding:"11px" }}
+                    onClick={()=>setConfirmReset(true)}>
+                    🔄 Reset All My Data
+                  </button>
+                : <div style={{ background:BLACK, border:`1px solid ${RED}`, padding:"14px" }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:2, marginBottom:6 }}>
+                      ARE YOU SURE?
+                    </div>
+                    <div style={{ fontSize:12, color:MUTED, marginBottom:14, lineHeight:1.6 }}>
+                      This will permanently delete all your food logs, workouts, sleep entries, body metrics, progress photos, and streaks. Your name and goal will be reset. This cannot be undone.
+                    </div>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button style={{ ...S.btn, flex:1, background:RED }} onClick={onReset}>
+                        Yes, Reset Everything
+                      </button>
+                      <button style={{ ...S.btnSm, flex:1, textAlign:"center" }}
+                        onClick={()=>setConfirmReset(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+              }
+            </div>
+          </div>
 
           <div style={{ textAlign:"center", padding:"20px 0 0", borderTop:`1px solid ${BORDER}`, marginTop:6 }}>
             <div style={{ fontFamily:"'Bebas Neue'", fontSize:18, letterSpacing:4, color:MUTED }}>IZANA <span style={{ color:RED }}>MODE</span></div>
@@ -1237,6 +1277,38 @@ function MainApp({ user }) {
   const addFoodItem = (item) => { setFoodLog(p=>[...p, item]); };
   const deleteFoodItem = (id) => { setFoodLog(p=>p.filter(f=>f.id!==id)); };
   const editFoodItem = (id, changes) => { setFoodLog(p=>p.map(f=>f.id===id?{...f,...changes}:f)); };
+
+  const handleReset = () => {
+    const keys = ['im_foodLog','im_favorites','im_sessions','im_bodyMetrics','im_sleepLog',
+                  'im_customWorkouts','im_progressPhotos','im_waterLog','im_prevScore',
+                  'im_user','oja_goals','oja_profiles'];
+    keys.forEach(k=>{ try { localStorage.removeItem(k); } catch {} });
+    window.location.reload();
+  };
+
+  const handleExport = () => {
+    const data = {
+      exportedAt: new Date().toISOString(),
+      user,
+      goals: activeGoals,
+      profiles,
+      foodLog,
+      favorites,
+      sessions,
+      bodyMetrics,
+      sleepLog,
+      waterLog,
+      customWorkouts,
+      progressPhotos: progressPhotos.map(p=>({ ...p, base64:"[image data omitted for size]" })),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `izana-mode-export-${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const addWater = () => setWaterLog(w=>({...w, cups:Math.min(w.cups+1, 20)}));
   const removeWater = () => setWaterLog(w=>({...w, cups:Math.max(0, w.cups-1)}));
   const saveCurrentWorkout = (name) => {
@@ -1334,7 +1406,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
   return (
     <div style={S.app}>
       {showAddFood && <AddFoodPanel onAdd={addFoodItem} onClose={()=>setShowAddFood(false)} favorites={favorites} recentFoods={recentFoods}/>}
-      {showSettings && <SettingsPanel user={user} profiles={profiles} onSaveProfiles={(p)=>{ setProfiles(p); setShowSettings(false); }} onClose={()=>setShowSettings(false)}/>}
+      {showSettings && <SettingsPanel user={user} profiles={profiles} onSaveProfiles={(p)=>{ setProfiles(p); setShowSettings(false); }} onReset={handleReset} onExport={handleExport} onClose={()=>setShowSettings(false)}/>}
       {rankNotif && <RankUpCelebration rank={rankNotif} onDone={()=>setRankNotif(null)}/>}
 
       <div style={S.header}>
