@@ -142,6 +142,29 @@ function WeightChart({ data }) {
   );
 }
 
+function SleepChart({ data }) {
+  if (!data||data.length<2) return <div style={{ textAlign:"center", padding:"20px 0", color:MUTED, fontSize:13 }}>Log at least 2 entries to see your trend</div>;
+  const hours=data.map(d=>parseFloat(d.hours));
+  const minH=Math.max(0,Math.min(...hours)-1), maxH=Math.max(...hours)+1;
+  const W=320, H=100, pad=20;
+  const toX=(i)=>pad+(i/(data.length-1))*(W-pad*2);
+  const toY=(h)=>H-pad-((h-minH)/(maxH-minH))*(H-pad*2);
+  const pts=data.map((d,i)=>`${toX(i)},${toY(parseFloat(d.hours))}`).join(" ");
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:"visible" }}>
+      {/* 8hr reference line */}
+      {maxH>=8&&minH<=8&&<line x1={pad} x2={W-pad} y1={toY(8)} y2={toY(8)} stroke={MUTED} strokeWidth="1" strokeDasharray="4,4"/>}
+      <polyline points={pts} fill="none" stroke={BLACK} strokeWidth="2.5" strokeLinejoin="round"/>
+      {data.map((d,i)=>(
+        <g key={i}>
+          <circle cx={toX(i)} cy={toY(parseFloat(d.hours))} r="4" fill={parseFloat(d.hours)>=7?BLACK:RED}/>
+          <text x={toX(i)} y={toY(parseFloat(d.hours))-8} textAnchor="middle" style={{ fontSize:9, fontFamily:"'DM Sans'", fill:TEXT }}>{d.hours}h</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function StarRating({ value, onChange, color=RED }) {
   return (
     <div style={{ display:"flex", gap:6 }}>
@@ -350,7 +373,19 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
           confidence:"high", notes:`Barcode: ${code}`
         });
       } else {
-        setError("Product not found in database. Try Photo scan instead.");
+        // Fallback to AI search using the barcode as a product lookup
+        try {
+          const aiRes = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:800,
+              messages:[{ role:"user", content:`A product with barcode ${code} was not found in the Open Food Facts database. Based on the barcode number alone, try to estimate what common product this might be, or provide a reasonable generic food entry. Respond ONLY with valid JSON (no markdown): {"name":"product name or best guess","calories":number,"protein":number,"carbs":number,"fat":number,"fiber":number,"sugar":number,"serving":"1 serving","confidence":"low","notes":"Not found in database — AI estimate only"}` }]
+            })
+          });
+          const aiData = await aiRes.json();
+          const txt = aiData.content?.find(b=>b.type==="text")?.text||"";
+          selectResult(JSON.parse(txt.replace(/```json|```/g,"").trim()));
+        } catch {
+          setError("Product not found. Try the Search or Photo tab instead.");
+        }
       }
     } catch { setError("Lookup failed. Check your connection."); }
     setLoading(false);
@@ -1165,6 +1200,7 @@ function MainApp({ user }) {
   const [sleepLog,setSleepLog]=useState(()=>lsGet('im_sleepLog',[]));
   const [customWorkouts,setCustomWorkouts]=useState(()=>lsGet('im_customWorkouts',[]));
   const [progressPhotos,setProgressPhotos]=useState(()=>lsGet('im_progressPhotos',[]));
+  const [cardioLog,setCardioLog]=useState(()=>lsGet('im_cardioLog',[]));
   const [waterLog,setWaterLog]=useState(()=>{
     const saved=lsGet('im_waterLog',null);
     const today=new Date().toDateString();
@@ -1187,6 +1223,8 @@ function MainApp({ user }) {
   const [activeSession,setActiveSession]=useState(null);
   const [saveWorkoutName,setSaveWorkoutName]=useState("");
   const [showSaveWorkout,setShowSaveWorkout]=useState(false);
+  const [newCardio,setNewCardio]=useState({ type:"Run", duration:"", distance:"", effort:3 });
+  const [showCardioForm,setShowCardioForm]=useState(false);
   const [editingFood,setEditingFood]=useState(null);
   const [newExName,setNewExName]=useState("");
   const [newWeight,setNewWeight]=useState("");
@@ -1198,7 +1236,7 @@ function MainApp({ user }) {
 
   const today=new Date().toLocaleDateString("en-US",{ weekday:"short", month:"short", day:"numeric" });
   const totals=foodLog.reduce((a,f)=>({ calories:a.calories+(f.calories||0), protein:a.protein+(f.protein||0), carbs:a.carbs+(f.carbs||0), fat:a.fat+(f.fat||0) }),{ calories:0, protein:0, carbs:0, fat:0 });
-  const activityScore=foodLog.length+sessions.length+bodyMetrics.length+sleepLog.length;
+  const activityScore=foodLog.length+sessions.length+bodyMetrics.length+sleepLog.length+cardioLog.length;
   const rank=getRank(activityScore);
   const nextRank=RANKS[RANKS.indexOf(RANKS.find(r=>r.min===rank.min))+1];
   const rankProgress=nextRank?Math.min((activityScore-rank.min)/(nextRank.min-rank.min)*100,100):100;
@@ -1221,6 +1259,7 @@ function MainApp({ user }) {
   useEffect(()=>lsSet('im_sleepLog', sleepLog),[sleepLog]);
   useEffect(()=>lsSet('im_customWorkouts', customWorkouts),[customWorkouts]);
   useEffect(()=>lsSet('im_progressPhotos', progressPhotos),[progressPhotos]);
+  useEffect(()=>lsSet('im_cardioLog', cardioLog),[cardioLog]);
   useEffect(()=>lsSet('im_waterLog', waterLog),[waterLog]);
   useEffect(()=>lsSet('im_prevScore', prevScore),[prevScore]);
 
@@ -1277,6 +1316,13 @@ function MainApp({ user }) {
   const addFoodItem = (item) => { setFoodLog(p=>[...p, item]); };
   const deleteFoodItem = (id) => { setFoodLog(p=>p.filter(f=>f.id!==id)); };
   const editFoodItem = (id, changes) => { setFoodLog(p=>p.map(f=>f.id===id?{...f,...changes}:f)); };
+
+  const addCardio = () => {
+    if (!newCardio.duration || isNaN(parseFloat(newCardio.duration))) return;
+    setCardioLog(p=>[...p, { ...newCardio, id:Date.now(), date:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}), time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) }]);
+    setNewCardio({ type:"Run", duration:"", distance:"", effort:3 });
+    setShowCardioForm(false);
+  };
 
   const handleReset = () => {
     const keys = ['im_foodLog','im_favorites','im_sessions','im_bodyMetrics','im_sleepLog',
@@ -1650,14 +1696,43 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                               {favorites.find(x=>x.name===f.name)?"★":"☆"}
                             </button>
                             <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:RED }}>{Math.round(f.calories)}</div>
+                            <button onClick={()=>setEditingFood(editingFood===f.id?null:f.id)} style={{ background:"transparent", border:`1px solid ${BORDER}`, cursor:"pointer", color:MUTED, fontSize:11, padding:"3px 7px" }}>✏️</button>
                             <button onClick={()=>deleteFoodItem(f.id)} style={{ background:"transparent", border:`1px solid ${BORDER}`, cursor:"pointer", color:MUTED, fontSize:12, lineHeight:1, padding:"3px 7px" }}>✕</button>
                           </div>
                         </div>
-                        <div style={{ display:"flex", gap:6 }}>
+                        <div style={{ display:"flex", gap:6, marginBottom: editingFood===f.id?10:0 }}>
                           <span style={S.pill(BLACK)}>P: {Math.round(f.protein)}g</span>
                           <span style={S.pill(MUTED)}>C: {Math.round(f.carbs)}g</span>
                           <span style={S.pill(RED)}>F: {Math.round(f.fat)}g</span>
                         </div>
+                        {editingFood===f.id&&(
+                          <div style={{ borderTop:`1px solid ${BORDER}`, paddingTop:10 }}>
+                            <div style={{ fontSize:11, color:MUTED, marginBottom:8, letterSpacing:1 }}>EDIT ENTRY</div>
+                            <div style={{ marginBottom:8 }}>
+                              <input defaultValue={f.name} onBlur={e=>editFoodItem(f.id,{name:e.target.value})}
+                                style={{ ...S.input, fontSize:13, marginBottom:8 }} placeholder="Food name"/>
+                            </div>
+                            <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>KCAL</div>
+                                <input type="number" defaultValue={f.calories} onBlur={e=>editFoodItem(f.id,{calories:parseFloat(e.target.value)||f.calories})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/>
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>PROTEIN (g)</div>
+                                <input type="number" defaultValue={f.protein} onBlur={e=>editFoodItem(f.id,{protein:parseFloat(e.target.value)||f.protein})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/>
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>CARBS (g)</div>
+                                <input type="number" defaultValue={f.carbs} onBlur={e=>editFoodItem(f.id,{carbs:parseFloat(e.target.value)||f.carbs})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/>
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:10, color:MUTED, marginBottom:3 }}>FAT (g)</div>
+                                <input type="number" defaultValue={f.fat} onBlur={e=>editFoodItem(f.id,{fat:parseFloat(e.target.value)||f.fat})} style={{ ...S.input, textAlign:"center", padding:"6px 4px" }}/>
+                              </div>
+                            </div>
+                            <button onClick={()=>setEditingFood(null)} style={{ ...S.btnSm, width:"100%", textAlign:"center" }}>✓ Done</button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1669,7 +1744,60 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
         {/* ── WORKOUT ── */}
         {tab==="workout"&&!activeSession&&(<>
           <div style={{ fontFamily:"'Bebas Neue'", fontSize:24, letterSpacing:2, marginBottom:4 }}>Workouts</div>
-          <div style={{ fontSize:12, color:MUTED, marginBottom:14 }}>Select a regimen and begin</div>
+          <div style={{ fontSize:12, color:MUTED, marginBottom:14 }}>Select a regimen or log cardio</div>
+
+          {/* ── CARDIO SECTION ── */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+            <div style={S.labelRed}>🏃 Cardio</div>
+            <button style={S.btnSmRed} onClick={()=>setShowCardioForm(v=>!v)}>{showCardioForm?"▲ Cancel":"+ Log Cardio"}</button>
+          </div>
+
+          {showCardioForm&&<div style={S.card}>
+            <div style={{ marginBottom:12 }}>
+              <div style={S.label}>ACTIVITY TYPE</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                {["Run","Walk","Cycle","Swim","Row","Elliptical","Jump Rope","Other"].map(t=>(
+                  <button key={t} onClick={()=>setNewCardio(c=>({...c,type:t}))}
+                    style={{ padding:"6px 12px", fontFamily:"'DM Sans'", fontSize:12, background:newCardio.type===t?RED:CARD2, color:newCardio.type===t?WHITE:TEXT, border:`1px solid ${newCardio.type===t?RED:BORDER}`, cursor:"pointer" }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:10, marginBottom:12 }}>
+              <div style={{ flex:1 }}>
+                <div style={S.label}>DURATION (mins)</div>
+                <input style={S.input} type="number" placeholder="e.g. 30" value={newCardio.duration} onChange={e=>setNewCardio(c=>({...c,duration:e.target.value}))}/>
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={S.label}>DISTANCE (optional)</div>
+                <input style={S.input} type="number" placeholder="e.g. 3.1 mi" value={newCardio.distance} onChange={e=>setNewCardio(c=>({...c,distance:e.target.value}))}/>
+              </div>
+            </div>
+            <div style={{ marginBottom:14 }}>
+              <div style={S.label}>PERCEIVED EFFORT (1=easy · 5=max)</div>
+              <StarRating value={newCardio.effort} onChange={v=>setNewCardio(c=>({...c,effort:v}))} color={RED}/>
+            </div>
+            <button style={S.btn} onClick={addCardio}>✓ Log Cardio Session</button>
+          </div>}
+
+          {cardioLog.length>0&&<div style={S.card}>
+            <div style={S.label}>Recent Cardio</div>
+            {[...cardioLog].reverse().slice(0,5).map(c=>(
+              <div key={c.id} style={{ ...S.card2, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontWeight:600, fontSize:13 }}>{c.type}</div>
+                  <div style={{ fontSize:11, color:MUTED }}>{c.date} · Effort {c.effort}/5{c.distance?` · ${c.distance} mi`:""}</div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontFamily:"'Bebas Neue'", fontSize:18, color:RED }}>{c.duration}m</span>
+                  <button onClick={()=>setCardioLog(p=>p.filter(x=>x.id!==c.id))} style={{ background:"transparent", border:`1px solid ${BORDER}`, color:MUTED, fontSize:11, padding:"3px 7px", cursor:"pointer" }}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>}
+
+          <div style={S.labelRed}>🏋️ Strength</div>
           {sessions.length>0&&<div style={S.card}>
             <div style={S.label}>Recent Sessions</div>
             {sessions.slice(-3).reverse().map(s=>(
@@ -1810,13 +1938,17 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               </div>
             </div>}
             {sleepLog.length>0&&<div style={S.card}>
-              <div style={S.label}>Sleep History</div>
-              {[...sleepLog].reverse().slice(0,5).map(s=>(
-                <div key={s.id} style={{ ...S.card2, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div><div style={{ fontSize:11, color:MUTED }}>{s.date}</div><div style={{ fontSize:12, marginTop:2 }}>Quality {s.quality}/5 · Soreness {s.soreness}/5</div></div>
-                  <span style={{ fontFamily:"'Bebas Neue'", fontSize:22, color:RED }}>{s.hours}h</span>
-                </div>
-              ))}
+              <div style={S.label}>Sleep Trend</div>
+              <SleepChart data={[...sleepLog].slice(-14)}/>
+              <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:4 }}>Dashed line = 8hr target · Red dots = under 7hrs</div>
+              <div style={{ marginTop:10 }}>
+                {[...sleepLog].reverse().slice(0,5).map(s=>(
+                  <div key={s.id} style={{ ...S.card2, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div><div style={{ fontSize:11, color:MUTED }}>{s.date}</div><div style={{ fontSize:12, marginTop:2 }}>Quality {s.quality}/5 · Soreness {s.soreness}/5</div></div>
+                    <span style={{ fontFamily:"'Bebas Neue'", fontSize:22, color:parseFloat(s.hours)>=7?BLACK:RED }}>{s.hours}h</span>
+                  </div>
+                ))}
+              </div>
             </div>}
           </>)}
 
