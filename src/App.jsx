@@ -1446,6 +1446,194 @@ const EXERCISE_LIBRARY = {
   "Compound":   ["Deadlift","Squat","Bench Press","Overhead Press","Pull-Ups","Barbell Row","Power Clean","Push Press","Farmer Carry"],
 };
 
+// Muscle groups used in SVG diagram
+// Each exercise maps to: primary muscles (highlighted red), secondary (highlighted pink), tips
+const EXERCISE_INFO = {
+  "Bench Press":              { primary:["chest"], secondary:["triceps","front_delt"], tips:["Keep shoulder blades retracted and depressed","Plant feet flat on floor","Bar should touch mid-chest","Drive through your legs as you press"] },
+  "Incline Bench Press":      { primary:["upper_chest"], secondary:["front_delt","triceps"], tips:["Set bench to 30-45 degrees","Bar touches upper chest","Wider grip emphasizes chest more","Control the descent"] },
+  "Decline Bench Press":      { primary:["lower_chest"], secondary:["triceps","front_delt"], tips:["Use a spotter — blood rushes to head","Bar touches lower chest","Great for chest thickness","Feet locked into pad"] },
+  "Incline Dumbbell Press":   { primary:["upper_chest"], secondary:["front_delt","triceps"], tips:["Dumbbells allow greater range of motion","Touch dumbbells at top","Don't flare elbows too wide","Slow eccentric builds more muscle"] },
+  "Dumbbell Fly":             { primary:["chest"], secondary:["front_delt"], tips:["Slight bend in elbows throughout","Feel the stretch at the bottom","Don't go too heavy — injury risk","Squeeze chest hard at top"] },
+  "Cable Fly":                { primary:["chest"], secondary:["front_delt"], tips:["Cables keep constant tension","Cross hands at finish for full contraction","Keep slight forward lean","Great finisher after pressing"] },
+  "Push-Ups":                 { primary:["chest"], secondary:["triceps","front_delt","core"], tips:["Keep core tight throughout","Hands slightly wider than shoulders","Full range of motion — chest to floor","Elevate feet for upper chest emphasis"] },
+  "Chest Press Machine":      { primary:["chest"], secondary:["triceps","front_delt"], tips:["Adjust seat so handles are at chest height","Great for beginners — stable movement","Focus on squeezing at peak contraction","Control the weight back"] },
+  "Pec Deck":                 { primary:["chest"], secondary:["front_delt"], tips:["Great isolation movement","Don't let elbows go too far back","Squeeze hard for 1-2 seconds at peak","Good finisher for pump"] },
+  "Deadlift":                 { primary:["lower_back","hamstrings","glutes"], secondary:["traps","lats","quads","core"], tips:["Hinge at hips — not a squat","Bar stays in contact with legs","Brace core hard before pulling","Keep chest up, back flat"] },
+  "Pull-Ups":                 { primary:["lats"], secondary:["biceps","rear_delt","traps"], tips:["Dead hang at bottom for full stretch","Drive elbows to hips","Shoulder-width or wider grip","Cross feet to reduce swinging"] },
+  "Chin-Ups":                 { primary:["lats","biceps"], secondary:["rear_delt"], tips:["Underhand grip hits biceps more","Full hang at bottom","Pull until chin clears bar","Supinated grip = more bicep involvement"] },
+  "Barbell Row":              { primary:["lats","mid_back"], secondary:["biceps","rear_delt","traps"], tips:["Hinge to about 45 degrees","Pull bar to lower chest/upper abs","Squeeze shoulder blades at top","Don't use momentum"] },
+  "Dumbbell Row":             { primary:["lats","mid_back"], secondary:["biceps","rear_delt"], tips:["Support with same-side knee and hand","Pull elbow up and back","Don't rotate torso","Full stretch at bottom"] },
+  "Cable Row":                { primary:["mid_back","lats"], secondary:["biceps","rear_delt"], tips:["Sit tall — don't lean back excessively","Pull to lower abdomen","Squeeze shoulder blades together","Control the return"] },
+  "Lat Pulldown":             { primary:["lats"], secondary:["biceps","rear_delt"], tips:["Lean back slightly — not excessively","Pull bar to upper chest","Focus on driving elbows down","Full stretch at top"] },
+  "Face Pulls":               { primary:["rear_delt"], secondary:["traps","rotator_cuff"], tips:["Pull to face level — not neck","External rotation at end position","Great for shoulder health","Light weight, high reps"] },
+  "T-Bar Row":                { primary:["mid_back","lats"], secondary:["biceps","rear_delt"], tips:["Chest on pad keeps spine safe","Pull handles to chest","Great for mid-back thickness","Squeeze at top"] },
+  "Overhead Press":           { primary:["front_delt","side_delt"], secondary:["triceps","traps","upper_chest"], tips:["Brace core — protect lower back","Bar path slightly back over head","Flare elbows slightly at bottom","Lock out at top"] },
+  "Dumbbell OHP":             { primary:["front_delt","side_delt"], secondary:["triceps"], tips:["Greater range of motion than barbell","Neutral or pronated grip both work","Keep core tight throughout","Don't arch lower back"] },
+  "Lateral Raises":           { primary:["side_delt"], secondary:[], tips:["Slight bend in elbows","Lead with elbows — not wrists","Stop at shoulder height","Light weight, strict form — no swinging"] },
+  "Front Raises":             { primary:["front_delt"], secondary:["upper_chest"], tips:["Raise to shoulder height only","Alternate arms or both together","Keep slight bend in elbow","Control the descent"] },
+  "Rear Delt Fly":            { primary:["rear_delt"], secondary:["traps","mid_back"], tips:["Hinge forward 90 degrees","Lead with elbows","Squeeze shoulder blades at top","Light weight for proper isolation"] },
+  "Arnold Press":             { primary:["front_delt","side_delt"], secondary:["triceps"], tips:["Rotate palms out as you press","Named after Arnold Schwarzenegger","Hits all three delt heads","Don't rush the rotation"] },
+  "Bicep Curls":              { primary:["biceps"], secondary:["forearms"], tips:["Keep elbows pinned to sides","Full range — extend fully at bottom","Supinate wrist at top","Don't swing — no momentum"] },
+  "Hammer Curls":             { primary:["biceps","brachialis"], secondary:["forearms"], tips:["Neutral grip throughout","Targets brachialis for arm width","Can do alternating or together","Keep elbows stationary"] },
+  "Preacher Curl":            { primary:["biceps"], secondary:[], tips:["Fully isolates biceps — no cheating","Don't hyperextend at bottom","Slow eccentric phase","Great for bicep peak"] },
+  "Tricep Pushdowns":         { primary:["triceps"], secondary:[], tips:["Keep elbows pinned to sides","Fully extend at bottom","Bar, rope, or V-bar all work","Don't lean forward excessively"] },
+  "Skull Crushers":           { primary:["triceps"], secondary:[], tips:["Lower bar to forehead or behind head","Keep upper arms vertical","EZ bar is easier on wrists","Great for tricep mass"] },
+  "Overhead Tricep Extension":{ primary:["triceps"], secondary:[], tips:["Hits long head of tricep best","Keep elbows pointed forward","Full stretch at bottom","Don't let elbows flare out"] },
+  "Close Grip Bench":         { primary:["triceps"], secondary:["chest","front_delt"], tips:["Shoulder-width grip — not too close","Lower to lower chest","Keep elbows tucked in","Great mass builder for triceps"] },
+  "Squat":                    { primary:["quads","glutes"], secondary:["hamstrings","lower_back","core"], tips:["Break parallel for full development","Knees track over toes","Brace core hard before descent","Drive through heels"] },
+  "Front Squat":              { primary:["quads"], secondary:["glutes","core"], tips:["Elbows high in front rack","More upright torso than back squat","Core must be very strong","Clean grip or cross-arm grip"] },
+  "Romanian Deadlift":        { primary:["hamstrings","glutes"], secondary:["lower_back"], tips:["Hinge at hips — soft knee bend","Bar stays close to legs","Feel stretch in hamstrings","Don't round lower back"] },
+  "Leg Press":                { primary:["quads","glutes"], secondary:["hamstrings"], tips:["Don't lock knees at top","Foot position changes emphasis","High feet = more glutes","Low feet = more quads"] },
+  "Leg Curl":                 { primary:["hamstrings"], secondary:[], tips:["Full range of motion","Squeeze at peak contraction","Don't let hips rise off pad","Slow eccentric for growth"] },
+  "Leg Extension":            { primary:["quads"], secondary:[], tips:["Full extension at top","Hold 1 second at peak","Don't swing weight up","Good warm-up or finisher"] },
+  "Hip Thrust":               { primary:["glutes"], secondary:["hamstrings"], tips:["Drive hips up explosively","Squeeze glutes hard at top","Chin tucked to chest","Bar pad for comfort"] },
+  "Bulgarian Split Squat":    { primary:["quads","glutes"], secondary:["hamstrings","core"], tips:["Rear foot elevated on bench","Most of weight on front leg","Keep torso upright","Humbling exercise — go light first"] },
+  "Lunges":                   { primary:["quads","glutes"], secondary:["hamstrings","core"], tips:["Step long enough to get 90-degree knee","Keep front shin vertical","Can do walking or stationary","Don't let back knee slam floor"] },
+  "Calf Raises":              { primary:["calves"], secondary:[], tips:["Full range — stretch at bottom","Hold at top for 1 second","Standing hits gastrocnemius more","Seated hits soleus more"] },
+  "Hip Thrust":               { primary:["glutes"], secondary:["hamstrings"], tips:["Bar across hip crease","Drive through heels","Full hip extension at top","Bench should be at mid-back height"] },
+  "Plank":                    { primary:["core"], secondary:["glutes","shoulders"], tips:["Body in straight line","Don't let hips sag or pike","Breathe steadily throughout","Progress to weighted or RKC plank"] },
+  "Crunches":                 { primary:["core"], secondary:[], tips:["Don't pull on neck","Exhale as you crunch up","Short range of motion is fine","Quality over quantity"] },
+  "Leg Raises":               { primary:["core"], secondary:["hip_flexors"], tips:["Lower back stays pressed to bench","Control the descent","Tilt pelvis at top for full contraction","Bent knees makes it easier"] },
+  "Power Clean":              { primary:["quads","glutes","traps"], secondary:["hamstrings","core","shoulders"], tips:["Triple extension: ankles, knees, hips","Catch in quarter squat","Technically demanding — learn from a coach","Great for athleticism and power"] },
+  "Farmer Carry":             { primary:["traps","forearms","core"], secondary:["glutes","quads"], tips:["Stand tall — don't lean","Take short quick steps","Great for grip and core stability","Go heavy and far"] },
+};
+
+/* ── MUSCLE BODY DIAGRAM ─────────────────────────── */
+function MuscleBodyDiagram({ primary=[], secondary=[] }) {
+  const hit  = (m) => primary.includes(m)   ? RED    : secondary.includes(m) ? "#E8836B" : "#333";
+  const hitL = (m) => primary.includes(m)   ? RED    : secondary.includes(m) ? "#E8836B" : "#444";
+  return (
+    <svg viewBox="0 0 200 380" width="100%" style={{ maxHeight:280, display:"block", margin:"0 auto" }}>
+      {/* ── FRONT BODY ── */}
+      {/* Head */}
+      <ellipse cx="60" cy="22" rx="14" ry="16" fill="#2a2a2a" stroke="#444" strokeWidth="1"/>
+      {/* Neck */}
+      <rect x="54" y="36" width="12" height="10" fill="#2a2a2a"/>
+      {/* Upper chest */}
+      <ellipse cx="60" cy="58" rx="22" ry="10" fill={hit("upper_chest")} stroke="#555" strokeWidth="0.5"/>
+      {/* Chest */}
+      <ellipse cx="60" cy="70" rx="22" ry="14" fill={hit("chest")} stroke="#555" strokeWidth="0.5"/>
+      {/* Lower chest */}
+      <ellipse cx="60" cy="82" rx="20" ry="8" fill={hit("lower_chest")} stroke="#555" strokeWidth="0.5"/>
+      {/* Front delts */}
+      <ellipse cx="38" cy="56" rx="8" ry="10" fill={hit("front_delt")} stroke="#555" strokeWidth="0.5"/>
+      <ellipse cx="82" cy="56" rx="8" ry="10" fill={hit("front_delt")} stroke="#555" strokeWidth="0.5"/>
+      {/* Side delts */}
+      <ellipse cx="33" cy="60" rx="6" ry="8" fill={hit("side_delt")} stroke="#555" strokeWidth="0.5"/>
+      <ellipse cx="87" cy="60" rx="6" ry="8" fill={hit("side_delt")} stroke="#555" strokeWidth="0.5"/>
+      {/* Biceps */}
+      <rect x="26" y="68" width="10" height="22" rx="5" fill={hit("biceps")} stroke="#555" strokeWidth="0.5"/>
+      <rect x="84" y="68" width="10" height="22" rx="5" fill={hit("biceps")} stroke="#555" strokeWidth="0.5"/>
+      {/* Forearms */}
+      <rect x="24" y="92" width="9" height="20" rx="4" fill={hit("forearms")} stroke="#555" strokeWidth="0.5"/>
+      <rect x="87" y="92" width="9" height="20" rx="4" fill={hit("forearms")} stroke="#555" strokeWidth="0.5"/>
+      {/* Abs / Core */}
+      <rect x="50" y="88" width="20" height="32" rx="4" fill={hit("core")} stroke="#555" strokeWidth="0.5"/>
+      {/* Obliques */}
+      <rect x="42" y="92" width="10" height="24" rx="3" fill={hit("core")} stroke="#555" strokeWidth="0.5" opacity="0.6"/>
+      <rect x="68" y="92" width="10" height="24" rx="3" fill={hit("core")} stroke="#555" strokeWidth="0.5" opacity="0.6"/>
+      {/* Quads */}
+      <rect x="45" y="126" width="14" height="40" rx="6" fill={hit("quads")} stroke="#555" strokeWidth="0.5"/>
+      <rect x="61" y="126" width="14" height="40" rx="6" fill={hit("quads")} stroke="#555" strokeWidth="0.5"/>
+      {/* Knees */}
+      <ellipse cx="52" cy="170" rx="8" ry="6" fill="#2a2a2a" stroke="#444" strokeWidth="0.5"/>
+      <ellipse cx="68" cy="170" rx="8" ry="6" fill="#2a2a2a" stroke="#444" strokeWidth="0.5"/>
+      {/* Calves front */}
+      <rect x="45" y="177" width="13" height="32" rx="6" fill={hit("calves")} stroke="#555" strokeWidth="0.5"/>
+      <rect x="62" y="177" width="13" height="32" rx="6" fill={hit("calves")} stroke="#555" strokeWidth="0.5"/>
+      {/* Hips */}
+      <rect x="42" y="118" width="36" height="14" rx="4" fill={hit("glutes")} stroke="#555" strokeWidth="0.5" opacity="0.5"/>
+      {/* Label */}
+      <text x="60" y="375" textAnchor="middle" style={{ fontSize:8, fill:"#666", fontFamily:"'DM Sans'" }}>FRONT</text>
+
+      {/* ── BACK BODY ── */}
+      {/* Head */}
+      <ellipse cx="150" cy="22" rx="14" ry="16" fill="#2a2a2a" stroke="#444" strokeWidth="1"/>
+      {/* Neck */}
+      <rect x="144" y="36" width="12" height="10" fill="#2a2a2a"/>
+      {/* Traps */}
+      <ellipse cx="150" cy="50" rx="22" ry="10" fill={hit("traps")} stroke="#555" strokeWidth="0.5"/>
+      {/* Rear delts */}
+      <ellipse cx="128" cy="56" rx="8" ry="10" fill={hit("rear_delt")} stroke="#555" strokeWidth="0.5"/>
+      <ellipse cx="172" cy="56" rx="8" ry="10" fill={hit("rear_delt")} stroke="#555" strokeWidth="0.5"/>
+      {/* Lats */}
+      <ellipse cx="135" cy="75" rx="10" ry="20" fill={hit("lats")} stroke="#555" strokeWidth="0.5"/>
+      <ellipse cx="165" cy="75" rx="10" ry="20" fill={hit("lats")} stroke="#555" strokeWidth="0.5"/>
+      {/* Mid back / rhomboids */}
+      <rect x="138" y="58" width="24" height="20" rx="3" fill={hit("mid_back")} stroke="#555" strokeWidth="0.5"/>
+      {/* Lower back */}
+      <rect x="140" y="88" width="20" height="22" rx="4" fill={hit("lower_back")} stroke="#555" strokeWidth="0.5"/>
+      {/* Triceps */}
+      <rect x="120" y="68" width="10" height="24" rx="5" fill={hit("triceps")} stroke="#555" strokeWidth="0.5"/>
+      <rect x="170" y="68" width="10" height="24" rx="5" fill={hit("triceps")} stroke="#555" strokeWidth="0.5"/>
+      {/* Glutes */}
+      <ellipse cx="144" cy="124" rx="12" ry="14" fill={hit("glutes")} stroke="#555" strokeWidth="0.5"/>
+      <ellipse cx="156" cy="124" rx="12" ry="14" fill={hit("glutes")} stroke="#555" strokeWidth="0.5"/>
+      {/* Hamstrings */}
+      <rect x="133" y="136" width="14" height="36" rx="6" fill={hit("hamstrings")} stroke="#555" strokeWidth="0.5"/>
+      <rect x="153" y="136" width="14" height="36" rx="6" fill={hit("hamstrings")} stroke="#555" strokeWidth="0.5"/>
+      {/* Knees back */}
+      <ellipse cx="140" cy="176" rx="8" ry="6" fill="#2a2a2a" stroke="#444" strokeWidth="0.5"/>
+      <ellipse cx="160" cy="176" rx="8" ry="6" fill="#2a2a2a" stroke="#444" strokeWidth="0.5"/>
+      {/* Calves back */}
+      <rect x="133" y="183" width="13" height="30" rx="6" fill={hit("calves")} stroke="#555" strokeWidth="0.5"/>
+      <rect x="154" y="183" width="13" height="30" rx="6" fill={hit("calves")} stroke="#555" strokeWidth="0.5"/>
+      {/* Label */}
+      <text x="150" y="375" textAnchor="middle" style={{ fontSize:8, fill:"#666", fontFamily:"'DM Sans'" }}>BACK</text>
+    </svg>
+  );
+}
+
+/* ── EXERCISE DETAIL PANEL ───────────────────────── */
+function ExerciseDetailPanel({ exercise, onClose }) {
+  const info = EXERCISE_INFO[exercise] || { primary:[], secondary:[], tips:[] };
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:600, display:"flex", flexDirection:"column" }}>
+      <div style={{ flex:1, background:"rgba(0,0,0,0.6)" }} onClick={onClose}/>
+      <div style={{ background:BLACK, maxHeight:"88vh", display:"flex", flexDirection:"column", animation:"slideUp 0.35s cubic-bezier(.22,1,.36,1)" }}>
+        {/* Header */}
+        <div style={{ background:"#111", padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`2px solid ${RED}` }}>
+          <div>
+            <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:WHITE, letterSpacing:2 }}>{exercise}</div>
+            <div style={{ fontSize:11, color:MUTED, marginTop:2 }}>
+              {info.primary.length>0 && <>Primary: <span style={{ color:RED }}>{info.primary.map(m=>m.replace(/_/g," ")).join(", ")}</span></>}
+              {info.secondary.length>0 && <> · Secondary: <span style={{ color:"#E8836B" }}>{info.secondary.map(m=>m.replace(/_/g," ")).join(", ")}</span></>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:"none", color:"#555", fontSize:22, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ overflowY:"auto", padding:"16px", flex:1 }}>
+          {/* Muscle diagram */}
+          <div style={{ background:"#111", padding:"12px", marginBottom:14, borderLeft:`3px solid ${RED}` }}>
+            <MuscleBodyDiagram primary={info.primary} secondary={info.secondary}/>
+            <div style={{ display:"flex", gap:12, justifyContent:"center", marginTop:8 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                <div style={{ width:10, height:10, background:RED }}/>
+                <span style={{ fontSize:10, color:MUTED }}>Primary</span>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                <div style={{ width:10, height:10, background:"#E8836B" }}/>
+                <span style={{ fontSize:10, color:MUTED }}>Secondary</span>
+              </div>
+            </div>
+          </div>
+          {/* Form tips */}
+          {info.tips.length>0&&<>
+            <div style={{ fontFamily:"'Bebas Neue'", fontSize:12, color:RED, letterSpacing:2, marginBottom:10, borderBottom:`1px solid #333`, paddingBottom:5 }}>FORM TIPS</div>
+            {info.tips.map((tip,i)=>(
+              <div key={i} style={{ display:"flex", gap:10, marginBottom:10, alignItems:"flex-start" }}>
+                <div style={{ width:20, height:20, background:RED, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue'", fontSize:12, color:WHITE }}>{i+1}</div>
+                <div style={{ fontSize:13, color:WHITE, lineHeight:1.5, paddingTop:2 }}>{tip}</div>
+              </div>
+            ))}
+          </>}
+          {!info.tips.length&&<div style={{ fontSize:12, color:MUTED, textAlign:"center", padding:"20px 0" }}>Tap ⓘ on any exercise to see muscle targets and form cues.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [tab,setTab]=useState("home");
   const [foodLog,setFoodLog]=useState(()=>lsGet('im_foodLog',[]));
@@ -1483,6 +1671,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [editingFood,setEditingFood]=useState(null);
   const [showExercisePicker,setShowExercisePicker]=useState(false);
   const [exerciseSearch,setExerciseSearch]=useState("");
+  const [exerciseDetail,setExerciseDetail]=useState(null);
   const [logDate,setLogDate]=useState(()=>new Date().toDateString()); // food log history
   const [expandedSession,setExpandedSession]=useState(null); // workout history detail
   const [notifEnabled,setNotifEnabled]=useState(()=>lsGet('im_notifEnabled',false));
@@ -1811,6 +2000,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
       {showAddFood && <AddFoodPanel onAdd={addFoodItem} onClose={()=>setShowAddFood(false)} favorites={favorites} recentFoods={recentFoods}/>}
       {showSettings && <SettingsPanel user={user} session={session} profiles={profiles} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} onSaveProfiles={(p)=>{ setProfiles(p); setShowSettings(false); }} onReset={handleReset} onExport={handleExport} onSignOut={onSignOut} onClose={()=>setShowSettings(false)}/>}
       {rankNotif && <RankUpCelebration rank={rankNotif} onDone={()=>setRankNotif(null)}/>}
+      {exerciseDetail && <ExerciseDetailPanel exercise={exerciseDetail} onClose={()=>setExerciseDetail(null)}/>}
 
       <div style={S.header}>
         <div style={S.headerTop}>
@@ -2276,8 +2466,12 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <div key={ei} style={S.card}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:1, color:RED }}>{ex.name}</div>
-                <button onClick={()=>setActiveSession(s=>({ ...s, exercises:s.exercises.filter((_,i)=>i!==ei) }))}
-                  style={{ background:"transparent", border:"none", color:MUTED, cursor:"pointer", fontSize:14, padding:"2px 6px" }}>✕</button>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={()=>setExerciseDetail(ex.name)}
+                    style={{ background:"transparent", border:`1px solid #444`, color:MUTED, cursor:"pointer", fontSize:12, padding:"2px 8px", letterSpacing:1 }}>ⓘ</button>
+                  <button onClick={()=>setActiveSession(s=>({ ...s, exercises:s.exercises.filter((_,i)=>i!==ei) }))}
+                    style={{ background:"transparent", border:"none", color:MUTED, cursor:"pointer", fontSize:14, padding:"2px 6px" }}>✕</button>
+                </div>
               </div>
               <div style={{ display:"flex", gap:8, marginBottom:5 }}>
                 <span style={{ flex:0.4, fontSize:9, color:MUTED, textAlign:"center", letterSpacing:1 }}>SET</span>
@@ -2320,14 +2514,18 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                     return (
                       <div key={group} style={{ marginBottom:12 }}>
                         <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:6 }}>{group}</div>
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
                           {filtered.map(ex=>{
                             const already = activeSession.exercises.find(e=>e.name===ex);
                             return (
-                              <button key={ex} onClick={()=>{ if(already) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:ex, sets:[{reps:"",weight:""}] }] })); }}
-                                style={{ padding:"6px 12px", fontFamily:"'DM Sans'", fontSize:12, background:already?CARD2:CARD, color:already?MUTED:TEXT, border:`1px solid ${already?BORDER:RED}`, cursor:already?"default":"pointer", opacity:already?0.6:1 }}>
-                                {ex}{already?" ✓":""}
-                              </button>
+                              <div key={ex} style={{ display:"flex", alignItems:"center", gap:0 }}>
+                                <button onClick={()=>{ if(already) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:ex, sets:[{reps:"",weight:""}] }] })); }}
+                                  style={{ padding:"6px 10px", fontFamily:"'DM Sans'", fontSize:12, background:already?CARD2:CARD, color:already?MUTED:TEXT, border:`1px solid ${already?BORDER:RED}`, borderRight:"none", cursor:already?"default":"pointer", opacity:already?0.6:1 }}>
+                                  {ex}{already?" ✓":""}
+                                </button>
+                                <button onClick={()=>setExerciseDetail(ex)}
+                                  style={{ padding:"6px 7px", fontSize:11, background:"#1a1a1a", color:MUTED, border:`1px solid ${BORDER}`, cursor:"pointer" }}>ⓘ</button>
+                              </div>
                             );
                           })}
                         </div>
