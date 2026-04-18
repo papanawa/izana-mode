@@ -2597,70 +2597,67 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
           ))}
 
           {/* Exercise Picker */}
-          {showExercisePicker
-            ? <div style={S.card}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <div style={S.labelRed}>Add Exercise</div>
-                  <button style={S.btnSm} onClick={()=>{ setShowExercisePicker(false); setExerciseSearch(""); }}>✕ Close</button>
-                </div>
-                <input style={{ ...S.input, marginBottom:10 }} placeholder="Search exercises..." value={exerciseSearch}
-                  onChange={e=>setExerciseSearch(e.target.value)} autoFocus/>
-
-                {/* Template suggestions */}
-                {!exerciseSearch && activeSession.template?.length>0&&(
-                  <div style={{ marginBottom:14 }}>
-                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:6 }}>FROM {activeSession.name.toUpperCase()}</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                      {activeSession.template.map(ex=>{
-                        const already = activeSession.exercises.find(e=>e.name===ex);
-                        return (
-                          <div key={ex} style={{ display:"flex", alignItems:"center", gap:0 }}>
-                            <button onClick={()=>{ if(already) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:ex, sets:[{reps:"",weight:""}] }] })); }}
-                              style={{ padding:"7px 12px", fontFamily:"'DM Sans'", fontSize:12, background:already?CARD2:RED, color:already?MUTED:WHITE, border:`1px solid ${already?BORDER:RED}`, borderRight:"none", cursor:already?"default":"pointer" }}>
-                              {ex}{already?" ✓":""}
-                            </button>
-                            <button onClick={()=>setExerciseDetail(ex)}
-                              style={{ padding:"7px 7px", fontSize:11, background:"#1a1a1a", color:MUTED, border:`1px solid ${BORDER}`, cursor:"pointer" }}>ⓘ</button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Custom entry */}
-                {exerciseSearch.trim() && !Object.values(EXERCISE_LIBRARY).flat().find(e=>e.toLowerCase()===exerciseSearch.trim().toLowerCase()) && (
-                  <button onClick={()=>{ setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:exerciseSearch.trim(), sets:[{reps:"",weight:""}] }] })); setExerciseSearch(""); setShowExercisePicker(false); }}
-                    style={{ ...S.btn, marginBottom:10 }}>+ Add "{exerciseSearch.trim()}"</button>
-                )}
-                {/* Library grouped */}
-                <div style={{ maxHeight:340, overflowY:"auto" }}>
-                  {Object.entries(EXERCISE_LIBRARY).map(([group, exs])=>{
-                    const filtered = exs.filter(e=>e.toLowerCase().includes(exerciseSearch.toLowerCase()));
-                    if (!filtered.length) return null;
-                    return (
-                      <div key={group} style={{ marginBottom:12 }}>
-                        <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:6 }}>{group}</div>
-                        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                          {filtered.map(ex=>{
-                            const already = activeSession.exercises.find(e=>e.name===ex);
-                            return (
-                              <div key={ex} style={{ display:"flex", alignItems:"center", gap:0 }}>
-                                <button onClick={()=>{ if(already) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:ex, sets:[{reps:"",weight:""}] }] })); }}
-                                  style={{ padding:"6px 10px", fontFamily:"'DM Sans'", fontSize:12, background:already?CARD2:CARD, color:already?MUTED:TEXT, border:`1px solid ${already?BORDER:RED}`, borderRight:"none", cursor:already?"default":"pointer", opacity:already?0.6:1 }}>
-                                  {ex}{already?" ✓":""}
-                                </button>
-                                <button onClick={()=>setExerciseDetail(ex)}
-                                  style={{ padding:"6px 7px", fontSize:11, background:"#1a1a1a", color:MUTED, border:`1px solid ${BORDER}`, cursor:"pointer" }}>ⓘ</button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+          {showExercisePicker && <div style={S.card}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={S.labelRed}>Add Exercise</div>
+                <button style={S.btnSm} onClick={()=>{ setShowExercisePicker(false); setExerciseSearch(""); }}>✕ Close</button>
               </div>
+              <input style={{ ...S.input, marginBottom:10 }} placeholder="Search exercises..." value={exerciseSearch}
+                onChange={e=>setExerciseSearch(e.target.value)} autoFocus/>
+              {/* Template suggestions */}
+              {!exerciseSearch && activeSession.template?.length>0&&(
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:6 }}>FROM {activeSession.name.toUpperCase()}</div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                    {activeSession.template.map(ex=>{
+                      const already = activeSession.exercises.find(e=>e.name===ex);
+                      return (
+                        <div key={ex} style={{ display:"flex", alignItems:"center", gap:0 }}>
+                          <button onClick={()=>{ if(already) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:ex, sets:[{reps:"",weight:""}] }] })); }}
+                            style={{ padding:"7px 12px", fontFamily:"'DM Sans'", fontSize:12, background:already?CARD2:RED, color:already?MUTED:WHITE, border:`1px solid ${already?BORDER:RED}`, borderRight:"none", cursor:already?"default":"pointer" }}>
+                            {ex}{already?" ✓":""}
+                          </button>
+                          <button onClick={()=>setExerciseDetail(ex)}
+                            style={{ padding:"7px 7px", fontSize:11, background:"#1a1a1a", color:MUTED, border:`1px solid ${BORDER}`, cursor:"pointer" }}>ⓘ</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* Custom entry */}
+              {exerciseSearch.trim() && !Object.values(EXERCISE_LIBRARY).flat().find(e=>e.toLowerCase()===exerciseSearch.trim().toLowerCase()) && (
+                <button onClick={()=>{ setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:exerciseSearch.trim(), sets:[{reps:"",weight:""}] }] })); setExerciseSearch(""); setShowExercisePicker(false); }}
+                  style={{ ...S.btn, marginBottom:10 }}>+ Add "{exerciseSearch.trim()}"</button>
+              )}
+              {/* Library grouped */}
+              <div style={{ maxHeight:340, overflowY:"auto" }}>
+                {Object.entries(EXERCISE_LIBRARY).map(([group, exs])=>{
+                  const filtered = exs.filter(e=>e.toLowerCase().includes(exerciseSearch.toLowerCase()));
+                  if (!filtered.length) return null;
+                  return (
+                    <div key={group} style={{ marginBottom:12 }}>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:6 }}>{group}</div>
+                      <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                        {filtered.map(ex=>{
+                          const already = activeSession.exercises.find(e=>e.name===ex);
+                          return (
+                            <div key={ex} style={{ display:"flex", alignItems:"center", gap:0 }}>
+                              <button onClick={()=>{ if(already) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:ex, sets:[{reps:"",weight:""}] }] })); }}
+                                style={{ padding:"6px 10px", fontFamily:"'DM Sans'", fontSize:12, background:already?CARD2:CARD, color:already?MUTED:TEXT, border:`1px solid ${already?BORDER:RED}`, borderRight:"none", cursor:already?"default":"pointer", opacity:already?0.6:1 }}>
+                                {ex}{already?" ✓":""}
+                              </button>
+                              <button onClick={()=>setExerciseDetail(ex)}
+                                style={{ padding:"6px 7px", fontSize:11, background:"#1a1a1a", color:MUTED, border:`1px solid ${BORDER}`, cursor:"pointer" }}>ⓘ</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           }
 
           {activeSession.exercises.length > 0 && !showExercisePicker && (
