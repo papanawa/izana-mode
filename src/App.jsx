@@ -1436,6 +1436,16 @@ const SAMPLE_WORKOUTS = [
   { id:"lower", name:"下 — Lower Body",  exercises:["Squat","Romanian Deadlift","Leg Press","Leg Curl","Hip Thrust","Calf Raises"] },
 ];
 
+const EXERCISE_LIBRARY = {
+  "Chest":      ["Bench Press","Incline Bench Press","Decline Bench Press","Incline Dumbbell Press","Dumbbell Fly","Cable Fly","Push-Ups","Dips","Chest Press Machine","Pec Deck"],
+  "Back":       ["Deadlift","Pull-Ups","Chin-Ups","Barbell Row","Dumbbell Row","Cable Row","Lat Pulldown","Face Pulls","T-Bar Row","Rack Pull"],
+  "Shoulders":  ["Overhead Press","Dumbbell OHP","Lateral Raises","Front Raises","Rear Delt Fly","Arnold Press","Upright Row","Cable Lateral Raise","Machine Shoulder Press"],
+  "Arms":       ["Bicep Curls","Hammer Curls","Preacher Curl","Cable Curl","Incline Dumbbell Curl","Tricep Pushdowns","Skull Crushers","Overhead Tricep Extension","Close Grip Bench","Dips"],
+  "Legs":       ["Squat","Front Squat","Romanian Deadlift","Leg Press","Leg Curl","Leg Extension","Hip Thrust","Bulgarian Split Squat","Lunges","Calf Raises","Hack Squat","Sumo Deadlift"],
+  "Core":       ["Plank","Crunches","Leg Raises","Russian Twist","Ab Wheel","Cable Crunch","Hanging Knee Raise","Side Plank","Dead Bug","Pallof Press"],
+  "Compound":   ["Deadlift","Squat","Bench Press","Overhead Press","Pull-Ups","Barbell Row","Power Clean","Push Press","Farmer Carry"],
+};
+
 function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [tab,setTab]=useState("home");
   const [foodLog,setFoodLog]=useState(()=>lsGet('im_foodLog',[]));
@@ -1471,6 +1481,8 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [newCardio,setNewCardio]=useState({ type:"Run", duration:"", distance:"", effort:3, caloriesBurned:"", caloriesEstimated:null, estimatingCals:false });
   const [showCardioForm,setShowCardioForm]=useState(false);
   const [editingFood,setEditingFood]=useState(null);
+  const [showExercisePicker,setShowExercisePicker]=useState(false);
+  const [exerciseSearch,setExerciseSearch]=useState("");
   const [logDate,setLogDate]=useState(()=>new Date().toDateString()); // food log history
   const [expandedSession,setExpandedSession]=useState(null); // workout history detail
   const [notifEnabled,setNotifEnabled]=useState(()=>lsGet('im_notifEnabled',false));
@@ -1745,7 +1757,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
     setNewSleep({ hours:"", quality:3, soreness:3 });
   };
 
-  const startWorkout=(t)=>setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises:t.exercises.map(n=>({ name:n, sets:[{reps:"",weight:""}] })) });
+  const startWorkout=(t)=>{ setShowExercisePicker(false); setExerciseSearch(""); setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises:t.exercises.map(n=>({ name:n, sets:[{reps:"",weight:""}] })) }); };
   const addSet=(ei)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i===ei?{ ...ex, sets:[...ex.sets,{reps:"",weight:""}] }:ex) }));
   const updateSet=(ei,si,f,v)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st,[f]:v }) }) }));
   const addCustomEx=()=>{ if(!newExName.trim()) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:newExName.trim(), sets:[{reps:"",weight:""}] }] })); setNewExName(""); };
@@ -2220,67 +2232,126 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               </div>
             ))}
           </div>}
-          <div style={S.labelRed}>Select Regimen</div>
-          {SAMPLE_WORKOUTS.map(w=>(
-            <div key={w.id} style={{ ...S.card, cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }} onClick={()=>startWorkout(w)}>
-              <div><div style={{ fontFamily:"'Bebas Neue'", fontSize:17, letterSpacing:1 }}>{w.name}</div><div style={{ fontSize:11, color:MUTED, marginTop:3 }}>{w.exercises.join(" · ")}</div></div>
-              <div style={{ color:RED, fontSize:22, fontWeight:700 }}>›</div>
-            </div>
-          ))}
+          <div style={S.labelRed}>Quick Start</div>
+          <div style={{ fontSize:12, color:MUTED, marginBottom:10 }}>Pick a template to pre-load exercises, or start fresh and build your own.</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
+            {SAMPLE_WORKOUTS.map(w=>(
+              <button key={w.id} onClick={()=>startWorkout(w)}
+                style={{ background:CARD, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left" }}>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:16, letterSpacing:1, color:TEXT }}>{w.name}</div>
+                <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{w.exercises.length} exercises</div>
+              </button>
+            ))}
+          </div>
           {customWorkouts.length>0&&<>
             <div style={S.label}>My Saved Workouts</div>
-            {customWorkouts.map(w=>(
-              <div key={w.id} style={{ ...S.card, cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <div onClick={()=>startWorkout(w)} style={{ flex:1 }}>
-                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:17, letterSpacing:1 }}>{w.name}</div>
-                  <div style={{ fontSize:11, color:MUTED, marginTop:3 }}>{w.exercises.join(" · ")}</div>
-                </div>
-                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                  <div onClick={()=>startWorkout(w)} style={{ color:RED, fontSize:22, fontWeight:700, cursor:"pointer" }}>›</div>
-                  <button onClick={()=>setCustomWorkouts(p=>p.filter(x=>x.id!==w.id))} style={{ background:"transparent", border:`1px solid ${BORDER}`, color:MUTED, fontSize:11, padding:"3px 7px", cursor:"pointer" }}>✕</button>
-                </div>
-              </div>
-            ))}
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
+              {customWorkouts.map(w=>(
+                <button key={w.id} onClick={()=>startWorkout(w)}
+                  style={{ background:CARD, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left", position:"relative" }}>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:1, color:TEXT }}>{w.name}</div>
+                  <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{w.exercises.length} exercises</div>
+                  <span onClick={e=>{ e.stopPropagation(); setCustomWorkouts(p=>p.filter(x=>x.id!==w.id)); }}
+                    style={{ position:"absolute", top:4, right:4, fontSize:11, color:MUTED, cursor:"pointer", padding:"1px 4px" }}>✕</span>
+                </button>
+              ))}
+            </div>
           </>}
-          <button style={{ ...S.btnBlack, marginTop:4 }} onClick={()=>startWorkout({ name:"Custom Workout", exercises:[] })}>+ Custom Workout</button>
+          <button style={S.btnBlack} onClick={()=>startWorkout({ name:"My Workout", exercises:[] })}>+ Start Fresh</button>
         </>)}
 
         {tab==="workout"&&activeSession&&(<>
+          {/* Session header */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-            <div><div style={{ fontFamily:"'Bebas Neue'", fontSize:20, letterSpacing:1 }}>{activeSession.name}</div><div style={{ fontSize:11, color:MUTED }}>Started {activeSession.start}</div></div>
+            <div>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, letterSpacing:1 }}>{activeSession.name}</div>
+              <div style={{ fontSize:11, color:MUTED }}>Started {activeSession.start} · {activeSession.exercises.length} exercise{activeSession.exercises.length!==1?"s":""}</div>
+            </div>
             <button style={{ ...S.btnSm, color:RED }} onClick={()=>setActiveSession(null)}>Quit</button>
           </div>
+
+          {/* Exercise list */}
           {activeSession.exercises.map((ex,ei)=>(
             <div key={ei} style={S.card}>
-              <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:1, marginBottom:8, color:RED }}>{ex.name}</div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:1, color:RED }}>{ex.name}</div>
+                <button onClick={()=>setActiveSession(s=>({ ...s, exercises:s.exercises.filter((_,i)=>i!==ei) }))}
+                  style={{ background:"transparent", border:"none", color:MUTED, cursor:"pointer", fontSize:14, padding:"2px 6px" }}>✕</button>
+              </div>
               <div style={{ display:"flex", gap:8, marginBottom:5 }}>
                 <span style={{ flex:0.4, fontSize:9, color:MUTED, textAlign:"center", letterSpacing:1 }}>SET</span>
                 <span style={{ flex:1, fontSize:9, color:MUTED, textAlign:"center", letterSpacing:1 }}>REPS</span>
                 <span style={{ flex:1, fontSize:9, color:MUTED, textAlign:"center", letterSpacing:1 }}>LBS</span>
+                <span style={{ flex:0.3 }}/>
               </div>
               {ex.sets.map((st,si)=>(
-                <div key={si} style={S.setRow}>
+                <div key={si} style={{ ...S.setRow, alignItems:"center" }}>
                   <span style={{ flex:0.4, fontFamily:"'Bebas Neue'", fontSize:17, color:MUTED, textAlign:"center" }}>{si+1}</span>
-                  <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.reps} onChange={e=>updateSet(ei,si,"reps",e.target.value)}/>
-                  <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.weight} onChange={e=>updateSet(ei,si,"weight",e.target.value)}/>
+                  <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.reps} inputMode="numeric" onChange={e=>updateSet(ei,si,"reps",e.target.value)}/>
+                  <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.weight} inputMode="decimal" onChange={e=>updateSet(ei,si,"weight",e.target.value)}/>
+                  <button onClick={()=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex2,i)=>i!==ei?ex2:{ ...ex2, sets:ex2.sets.filter((_,j)=>j!==si) }) }))}
+                    style={{ flex:0.3, background:"transparent", border:"none", color:MUTED, cursor:"pointer", fontSize:13 }}>✕</button>
                 </div>
               ))}
-              <button style={{ ...S.btnSm, width:"100%", marginTop:4, borderStyle:"dashed" }} onClick={()=>addSet(ei)}>+ Set</button>
+              <button style={{ ...S.btnSm, width:"100%", marginTop:6, borderStyle:"dashed" }} onClick={()=>addSet(ei)}>+ Set</button>
             </div>
           ))}
-          <div style={{ ...S.card, display:"flex", gap:8 }}>
-            <input style={{ ...S.input, flex:1 }} placeholder="Add exercise..." value={newExName} onChange={e=>setNewExName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCustomEx()}/>
-            <button style={S.btnSmRed} onClick={addCustomEx}>Add</button>
-          </div>
-          {showSaveWorkout
-            ? <div style={{ ...S.card, display:"flex", gap:8 }}>
-                <input style={{ ...S.input, flex:1 }} placeholder="Name this workout..." value={saveWorkoutName} onChange={e=>setSaveWorkoutName(e.target.value)} autoFocus/>
-                <button style={S.btnSmRed} onClick={()=>{ saveCurrentWorkout(saveWorkoutName); setSaveWorkoutName(""); setShowSaveWorkout(false); }}>Save</button>
-                <button style={S.btnSm} onClick={()=>setShowSaveWorkout(false)}>✕</button>
+
+          {/* Exercise Picker */}
+          {showExercisePicker
+            ? <div style={S.card}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={S.labelRed}>Add Exercise</div>
+                  <button style={S.btnSm} onClick={()=>{ setShowExercisePicker(false); setExerciseSearch(""); }}>✕ Close</button>
+                </div>
+                <input style={{ ...S.input, marginBottom:10 }} placeholder="Search exercises..." value={exerciseSearch}
+                  onChange={e=>setExerciseSearch(e.target.value)} autoFocus/>
+                {/* Custom entry */}
+                {exerciseSearch.trim() && !Object.values(EXERCISE_LIBRARY).flat().find(e=>e.toLowerCase()===exerciseSearch.trim().toLowerCase()) && (
+                  <button onClick={()=>{ setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:exerciseSearch.trim(), sets:[{reps:"",weight:""}] }] })); setExerciseSearch(""); setShowExercisePicker(false); }}
+                    style={{ ...S.btn, marginBottom:10 }}>+ Add "{exerciseSearch.trim()}"</button>
+                )}
+                {/* Library grouped */}
+                <div style={{ maxHeight:340, overflowY:"auto" }}>
+                  {Object.entries(EXERCISE_LIBRARY).map(([group, exs])=>{
+                    const filtered = exs.filter(e=>e.toLowerCase().includes(exerciseSearch.toLowerCase()));
+                    if (!filtered.length) return null;
+                    return (
+                      <div key={group} style={{ marginBottom:12 }}>
+                        <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:6 }}>{group}</div>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                          {filtered.map(ex=>{
+                            const already = activeSession.exercises.find(e=>e.name===ex);
+                            return (
+                              <button key={ex} onClick={()=>{ if(already) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:ex, sets:[{reps:"",weight:""}] }] })); }}
+                                style={{ padding:"6px 12px", fontFamily:"'DM Sans'", fontSize:12, background:already?CARD2:CARD, color:already?MUTED:TEXT, border:`1px solid ${already?BORDER:RED}`, cursor:already?"default":"pointer", opacity:already?0.6:1 }}>
+                                {ex}{already?" ✓":""}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            : <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>setShowSaveWorkout(true)}>💾 Save as Template</button>
+            : <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>{ setShowExercisePicker(true); setExerciseSearch(""); }}>
+                + Add Exercise
+              </button>
           }
-          <button style={S.btn} onClick={finishWorkout}>✓ Finish Workout</button>
+
+          {/* Save & Finish */}
+          {!showExercisePicker&&<>
+            {showSaveWorkout
+              ? <div style={{ ...S.card, display:"flex", gap:8 }}>
+                  <input style={{ ...S.input, flex:1 }} placeholder="Name this workout..." value={saveWorkoutName} onChange={e=>setSaveWorkoutName(e.target.value)} autoFocus/>
+                  <button style={S.btnSmRed} onClick={()=>{ saveCurrentWorkout(saveWorkoutName); setSaveWorkoutName(""); setShowSaveWorkout(false); }}>Save</button>
+                  <button style={S.btnSm} onClick={()=>setShowSaveWorkout(false)}>✕</button>
+                </div>
+              : <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>setShowSaveWorkout(true)}>💾 Save as Template</button>
+            }
+            <button style={S.btn} onClick={finishWorkout}>✓ Finish Workout</button>
+          </>}
         </>)}
 
         {/* ── HEALTH ── */}
