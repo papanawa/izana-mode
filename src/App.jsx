@@ -1,4 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import {
+  sbSignUp, sbSignIn, sbSignInGoogle, sbSignOut,
+  sbGetSessionFromHash, sbRefreshToken,
+  sbUpsertData, sbLoadData, sbDeleteAccount
+} from "./supabase.js";
 
 const RED = "#C41E2A";
 const RED_DIM = "#9A1620";
@@ -655,7 +660,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
 }
 
 /* ── SETTINGS PANEL ──────────────────────────────── */
-function SettingsPanel({ user, profiles, onSaveProfiles, onReset, onExport, onClose }) {
+function SettingsPanel({ user, session, profiles, onSaveProfiles, onReset, onExport, onSignOut, onClose }) {
   const activeProfile  = profiles.find(p=>p.isActive) || profiles[0];
   const [editing, setEditing]   = useState(activeProfile?.id || null);
   const [showNew, setShowNew]   = useState(false);
@@ -925,6 +930,25 @@ function SettingsPanel({ user, profiles, onSaveProfiles, onReset, onExport, onCl
             </div>
           )}
 
+          {/* ── ACCOUNT ── */}
+          <div style={{ marginTop:8 }}>
+            <div style={S.labelRed}>👤 ACCOUNT</div>
+            <div style={{ ...S.card, borderLeft:`3px solid ${BORDER}` }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600 }}>{user.name}</div>
+                  <div style={{ fontSize:11, color:MUTED, marginTop:2 }}>
+                    {session ? "☁️ Cloud sync active" : "📱 Local only — sign in to sync"}
+                  </div>
+                </div>
+                {session && <div style={{ width:8, height:8, borderRadius:"50%", background:"#22c55e", flexShrink:0 }}/>}
+              </div>
+              {onSignOut && <button style={{ ...S.btnSmRed, width:"100%", textAlign:"center", padding:"11px" }} onClick={onSignOut}>
+                Sign Out
+              </button>}
+            </div>
+          </div>
+
           {/* ── MY DATA ── */}
           <div style={{ marginTop:8 }}>
             <div style={S.labelRed}>🗂️ MY DATA</div>
@@ -971,6 +995,107 @@ function SettingsPanel({ user, profiles, onSaveProfiles, onReset, onExport, onCl
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── AUTH SCREEN ─────────────────────────────────── */
+function AuthScreen({ onAuth }) {
+  const [mode, setMode]       = useState("login"); // login | signup
+  const [email, setEmail]     = useState("");
+  const [password, setPass]   = useState("");
+  const [name, setName]       = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+  const [phase, setPhase]     = useState("in");
+
+  const switchMode = (m) => {
+    setPhase("out");
+    setTimeout(() => { setMode(m); setPhase("in"); setError(""); }, 300);
+  };
+
+  const handleSubmit = async () => {
+    setError(""); setLoading(true);
+    try {
+      if (mode === "signup") {
+        if (!name.trim()) { setError("Please enter your name."); setLoading(false); return; }
+        const res = await sbSignUp(email, password, name);
+        if (res.error) { setError(res.error.message); setLoading(false); return; }
+        // After signup, sign in to get session
+        const loginRes = await sbSignIn(email, password);
+        if (loginRes.error) { setError("Account created! Please check your email to confirm, then log in."); setLoading(false); return; }
+        onAuth({ session: loginRes, name: name.trim() });
+      } else {
+        const res = await sbSignIn(email, password);
+        if (res.error) { setError(res.error.message); setLoading(false); return; }
+        onAuth({ session: res });
+      }
+    } catch { setError("Something went wrong. Check your connection."); }
+    setLoading(false);
+  };
+
+  const S = {
+    input: { background:"rgba(255,255,255,0.06)", color:WHITE, border:`1px solid #333`, borderBottom:`2px solid ${RED}`, borderRadius:0, padding:"12px 14px", fontSize:14, fontFamily:"'DM Sans'", width:"100%", boxSizing:"border-box", outline:"none" },
+    btn:   { background:RED, color:WHITE, border:"none", borderRadius:0, padding:"14px 20px", fontSize:14, fontWeight:600, fontFamily:"'DM Sans'", cursor:"pointer", width:"100%", letterSpacing:1, textTransform:"uppercase" },
+    btnGoogle: { background:"transparent", color:WHITE, border:`1px solid #333`, borderRadius:0, padding:"12px 20px", fontSize:13, fontFamily:"'DM Sans'", cursor:"pointer", width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:10 },
+    link:  { background:"transparent", border:"none", color:RED, fontSize:12, cursor:"pointer", fontFamily:"'DM Sans'", letterSpacing:0.5, textDecoration:"underline" },
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:BLACK, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", overflow:"hidden", padding:"0 24px" }}>
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${RED},${BLACK})` }}/>
+      <div style={{ position:"absolute", bottom:-40, right:-40, opacity:0.04 }}><YinYang size={300} className="spin-slow"/></div>
+
+      {/* Logo */}
+      <div style={{ textAlign:"center", marginBottom:36 }}>
+        <YinYang size={56} style={{ margin:"0 auto 16px" }}/>
+        <div style={{ fontFamily:"'Bebas Neue'", fontSize:36, color:WHITE, letterSpacing:5, lineHeight:1 }}>
+          IZANA <span style={{ color:RED }}>MODE</span>
+        </div>
+        <div style={{ fontSize:10, color:"#444", letterSpacing:3, marginTop:6 }}>王者之道</div>
+      </div>
+
+      {/* Form */}
+      <div style={{ width:"100%", maxWidth:360, opacity:phase==="out"?0:1, transform:phase==="out"?"translateY(12px)":"translateY(0)", transition:"opacity 0.3s, transform 0.3s" }}>
+        <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:4, marginBottom:20, textAlign:"center" }}>
+          {mode==="login" ? "SIGN IN TO CONTINUE" : "CREATE YOUR ACCOUNT"}
+        </div>
+
+        {/* Google SSO */}
+        <button style={S.btnGoogle} onClick={sbSignInGoogle}>
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+          Continue with Google
+        </button>
+
+        <div style={{ display:"flex", alignItems:"center", gap:12, margin:"16px 0" }}>
+          <div style={{ flex:1, height:1, background:"#222" }}/>
+          <span style={{ fontSize:11, color:"#444", letterSpacing:2 }}>OR</span>
+          <div style={{ flex:1, height:1, background:"#222" }}/>
+        </div>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {mode==="signup" && (
+            <input style={S.input} placeholder="Your name" value={name} onChange={e=>setName(e.target.value)}/>
+          )}
+          <input style={S.input} placeholder="Email address" type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
+          <input style={S.input} placeholder="Password" type="password" value={password} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
+        </div>
+
+        {error && <div style={{ fontSize:12, color:RED, marginTop:10, lineHeight:1.5, padding:"8px 12px", background:RED+"11", borderLeft:`2px solid ${RED}` }}>{error}</div>}
+
+        <button style={{ ...S.btn, marginTop:16, opacity:loading?0.7:1 }} onClick={handleSubmit} disabled={loading}>
+          {loading ? "⚡ Please wait..." : mode==="login" ? "Sign In" : "Create Account"}
+        </button>
+
+        <div style={{ textAlign:"center", marginTop:16, fontSize:12, color:"#555" }}>
+          {mode==="login"
+            ? <>No account? <button style={S.link} onClick={()=>switchMode("signup")}>Create one</button></>
+            : <>Already have an account? <button style={S.link} onClick={()=>switchMode("login")}>Sign in</button></>
+          }
+        </div>
+      </div>
+
+      <div style={{ position:"absolute", bottom:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${BLACK},${RED})` }}/>
     </div>
   );
 }
@@ -1191,7 +1316,7 @@ const SAMPLE_WORKOUTS = [
   { id:"full", name:"全 — Full Body", exercises:["Deadlift","Bench Press","Squat","Pull-Ups"] },
 ];
 
-function MainApp({ user }) {
+function MainApp({ user, session, onSignOut }) {
   const [tab,setTab]=useState("home");
   const [foodLog,setFoodLog]=useState(()=>lsGet('im_foodLog',[]));
   const [favorites,setFavorites]=useState(()=>lsGet('im_favorites',[]));
@@ -1223,7 +1348,7 @@ function MainApp({ user }) {
   const [activeSession,setActiveSession]=useState(null);
   const [saveWorkoutName,setSaveWorkoutName]=useState("");
   const [showSaveWorkout,setShowSaveWorkout]=useState(false);
-  const [newCardio,setNewCardio]=useState({ type:"Run", duration:"", distance:"", effort:3 });
+  const [newCardio,setNewCardio]=useState({ type:"Run", duration:"", distance:"", effort:3, caloriesBurned:"", caloriesEstimated:null, estimatingCals:false });
   const [showCardioForm,setShowCardioForm]=useState(false);
   const [editingFood,setEditingFood]=useState(null);
   const [newExName,setNewExName]=useState("");
@@ -1262,6 +1387,28 @@ function MainApp({ user }) {
   useEffect(()=>lsSet('im_cardioLog', cardioLog),[cardioLog]);
   useEffect(()=>lsSet('im_waterLog', waterLog),[waterLog]);
   useEffect(()=>lsSet('im_prevScore', prevScore),[prevScore]);
+
+  // ── CLOUD SYNC ── push all state to Supabase whenever anything changes
+  useEffect(() => {
+    if (!session?.access_token) return;
+    const userId = parseJwt(session.access_token)?.sub;
+    if (!userId) return;
+    const payload = {
+      user_profile:    user,
+      food_log:        foodLog,
+      favorites,
+      sessions,
+      body_metrics:    bodyMetrics,
+      sleep_log:       sleepLog,
+      cardio_log:      cardioLog,
+      custom_workouts: customWorkouts,
+      profiles,
+    };
+    const timer = setTimeout(() => {
+      sbUpsertData(session.access_token, userId, payload);
+    }, 2000); // debounce — wait 2s after last change before syncing
+    return () => clearTimeout(timer);
+  }, [foodLog, favorites, sessions, bodyMetrics, sleepLog, cardioLog, customWorkouts, profiles]);
 
   // Rank up detection
   useEffect(()=>{
@@ -1319,15 +1466,39 @@ function MainApp({ user }) {
 
   const addCardio = () => {
     if (!newCardio.duration || isNaN(parseFloat(newCardio.duration))) return;
-    setCardioLog(p=>[...p, { ...newCardio, id:Date.now(), date:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}), time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) }]);
-    setNewCardio({ type:"Run", duration:"", distance:"", effort:3 });
+    setCardioLog(p=>[...p, {
+      ...newCardio,
+      id:Date.now(),
+      date:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}),
+      time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})
+    }]);
+    setNewCardio({ type:"Run", duration:"", distance:"", effort:3, caloriesBurned:"", caloriesEstimated:null, estimatingCals:false });
     setShowCardioForm(false);
+  };
+
+  const estimateCardioCalories = async () => {
+    if (!newCardio.duration || isNaN(parseFloat(newCardio.duration))) return;
+    setNewCardio(c=>({...c, estimatingCals:true}));
+    const latestWeight = bodyMetrics.length ? bodyMetrics[bodyMetrics.length-1].weight : null;
+    try {
+      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:200,
+          messages:[{ role:"user", content:`Estimate calories burned for this cardio session. Activity: ${newCardio.type}. Duration: ${newCardio.duration} minutes. ${newCardio.distance?`Distance: ${newCardio.distance} miles.`:""} Effort level: ${newCardio.effort}/5. ${latestWeight?`User weight: ${latestWeight} lbs.`:""} Respond ONLY with a single JSON object (no markdown): {"calories":number,"note":"one brief sentence explaining the estimate"}` }]
+        })
+      });
+      const data = await res.json();
+      const txt = data.content?.find(b=>b.type==="text")?.text||"";
+      const parsed = JSON.parse(txt.replace(/```json|```/g,"").trim());
+      setNewCardio(c=>({...c, caloriesEstimated:parsed, caloriesBurned:String(parsed.calories), estimatingCals:false}));
+    } catch {
+      setNewCardio(c=>({...c, estimatingCals:false}));
+    }
   };
 
   const handleReset = () => {
     const keys = ['im_foodLog','im_favorites','im_sessions','im_bodyMetrics','im_sleepLog',
                   'im_customWorkouts','im_progressPhotos','im_waterLog','im_prevScore',
-                  'im_user','oja_goals','oja_profiles'];
+                  'im_user','oja_goals','oja_profiles','im_cardioLog'];
     keys.forEach(k=>{ try { localStorage.removeItem(k); } catch {} });
     window.location.reload();
   };
@@ -1452,7 +1623,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
   return (
     <div style={S.app}>
       {showAddFood && <AddFoodPanel onAdd={addFoodItem} onClose={()=>setShowAddFood(false)} favorites={favorites} recentFoods={recentFoods}/>}
-      {showSettings && <SettingsPanel user={user} profiles={profiles} onSaveProfiles={(p)=>{ setProfiles(p); setShowSettings(false); }} onReset={handleReset} onExport={handleExport} onClose={()=>setShowSettings(false)}/>}
+      {showSettings && <SettingsPanel user={user} session={session} profiles={profiles} onSaveProfiles={(p)=>{ setProfiles(p); setShowSettings(false); }} onReset={handleReset} onExport={handleExport} onSignOut={onSignOut} onClose={()=>setShowSettings(false)}/>}
       {rankNotif && <RankUpCelebration rank={rankNotif} onDone={()=>setRankNotif(null)}/>}
 
       <div style={S.header}>
@@ -1757,7 +1928,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               <div style={S.label}>ACTIVITY TYPE</div>
               <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                 {["Run","Walk","Cycle","Swim","Row","Elliptical","Jump Rope","Other"].map(t=>(
-                  <button key={t} onClick={()=>setNewCardio(c=>({...c,type:t}))}
+                  <button key={t} onClick={()=>setNewCardio(c=>({...c,type:t,caloriesEstimated:null,caloriesBurned:""}))}
                     style={{ padding:"6px 12px", fontFamily:"'DM Sans'", fontSize:12, background:newCardio.type===t?RED:CARD2, color:newCardio.type===t?WHITE:TEXT, border:`1px solid ${newCardio.type===t?RED:BORDER}`, cursor:"pointer" }}>
                     {t}
                   </button>
@@ -1767,7 +1938,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <div style={{ display:"flex", gap:10, marginBottom:12 }}>
               <div style={{ flex:1 }}>
                 <div style={S.label}>DURATION (mins)</div>
-                <input style={S.input} type="number" placeholder="e.g. 30" value={newCardio.duration} onChange={e=>setNewCardio(c=>({...c,duration:e.target.value}))}/>
+                <input style={S.input} type="number" placeholder="e.g. 30" value={newCardio.duration} onChange={e=>setNewCardio(c=>({...c,duration:e.target.value,caloriesEstimated:null,caloriesBurned:""}))}/>
               </div>
               <div style={{ flex:1 }}>
                 <div style={S.label}>DISTANCE (optional)</div>
@@ -1776,8 +1947,36 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             </div>
             <div style={{ marginBottom:14 }}>
               <div style={S.label}>PERCEIVED EFFORT (1=easy · 5=max)</div>
-              <StarRating value={newCardio.effort} onChange={v=>setNewCardio(c=>({...c,effort:v}))} color={RED}/>
+              <StarRating value={newCardio.effort} onChange={v=>setNewCardio(c=>({...c,effort:v,caloriesEstimated:null,caloriesBurned:""}))} color={RED}/>
             </div>
+
+            {/* Calories burned */}
+            <div style={{ marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                <div style={S.label}>CALORIES BURNED</div>
+                {newCardio.duration&&<button onClick={estimateCardioCalories} disabled={newCardio.estimatingCals}
+                  style={{ background:"transparent", border:`1px solid ${RED}`, color:RED, fontSize:11, fontFamily:"'DM Sans'", padding:"4px 10px", cursor:"pointer", letterSpacing:0.5 }}>
+                  {newCardio.estimatingCals?"⚡ Estimating...":"⚡ AI Estimate"}
+                </button>}
+              </div>
+              {newCardio.caloriesEstimated&&(
+                <div style={{ background:BLACK, padding:"10px 12px", marginBottom:8, borderLeft:`3px solid ${RED}` }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:RED }}>{newCardio.caloriesEstimated.calories} <span style={{ fontSize:13, color:MUTED }}>kcal</span></div>
+                    <span style={{ fontSize:10, color:"#555", background:"#1a1a1a", padding:"3px 8px", letterSpacing:1 }}>AI ESTIMATE</span>
+                  </div>
+                  <div style={{ fontSize:11, color:"#666", lineHeight:1.5 }}>{newCardio.caloriesEstimated.note}</div>
+                </div>
+              )}
+              <div style={{ position:"relative" }}>
+                <input style={S.input} type="number" placeholder={newCardio.caloriesEstimated?"Edit if you have watch data...":"Enter or tap AI Estimate above"} value={newCardio.caloriesBurned}
+                  onChange={e=>setNewCardio(c=>({...c,caloriesBurned:e.target.value}))}/>
+                {newCardio.caloriesBurned&&newCardio.caloriesEstimated&&parseInt(newCardio.caloriesBurned)!==newCardio.caloriesEstimated.calories&&(
+                  <div style={{ fontSize:10, color:MUTED, marginTop:3 }}>⌚ Using your device data</div>
+                )}
+              </div>
+            </div>
+
             <button style={S.btn} onClick={addCardio}>✓ Log Cardio Session</button>
           </div>}
 
@@ -1788,9 +1987,10 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 <div>
                   <div style={{ fontWeight:600, fontSize:13 }}>{c.type}</div>
                   <div style={{ fontSize:11, color:MUTED }}>{c.date} · Effort {c.effort}/5{c.distance?` · ${c.distance} mi`:""}</div>
+                  {c.caloriesBurned&&<div style={{ fontSize:11, color:RED, fontWeight:600, marginTop:2 }}>{c.caloriesBurned} kcal burned</div>}
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <span style={{ fontFamily:"'Bebas Neue'", fontSize:18, color:RED }}>{c.duration}m</span>
+                  <span style={{ fontFamily:"'Bebas Neue'", fontSize:18, color:TEXT }}>{c.duration}m</span>
                   <button onClick={()=>setCardioLog(p=>p.filter(x=>x.id!==c.id))} style={{ background:"transparent", border:`1px solid ${BORDER}`, color:MUTED, fontSize:11, padding:"3px 7px", cursor:"pointer" }}>✕</button>
                 </div>
               </div>
@@ -2106,26 +2306,124 @@ function WelcomeBack({ user, onContinue }) {
 
 /* ── APP ROOT ────────────────────────────────────── */
 export default function App() {
-  const [user,setUser]=useState(()=>lsGet('im_user', null));
-  const [welcomed,setWelcomed]=useState(false);
+  const [session,   setSession]   = useState(()=>lsGet('im_session', null));
+  const [user,      setUser]      = useState(()=>lsGet('im_user', null));
+  const [welcomed,  setWelcomed]  = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [cloudLoading, setCloudLoading] = useState(false);
 
-  const handleComplete=(d)=>{
-    lsSet('im_user', d);
-    // Auto-apply TDEE-calculated goals if user filled in stats during onboarding
-    if(d.calcedGoals) lsSet('oja_goals', d.calcedGoals);
-    setUser(d);
-    setWelcomed(true);
+  // On mount: check for OAuth redirect hash, then validate/restore session
+  useEffect(() => {
+    const fromHash = sbGetSessionFromHash();
+    if (fromHash) {
+      lsSet('im_session', fromHash);
+      setSession(fromHash);
+    }
+    setAuthReady(true);
+  }, []);
+
+  // When session exists but token may be stale — refresh it silently
+  useEffect(() => {
+    if (!session?.refresh_token) return;
+    const refresh = async () => {
+      const res = await sbRefreshToken(session.refresh_token);
+      if (res.access_token) {
+        const updated = { access_token: res.access_token, refresh_token: res.refresh_token || session.refresh_token };
+        lsSet('im_session', updated);
+        setSession(updated);
+      }
+    };
+    // Refresh every 50 minutes
+    const interval = setInterval(refresh, 50 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [session]);
+
+  const handleAuth = async ({ session: newSession, name }) => {
+    lsSet('im_session', newSession);
+    setSession(newSession);
+    setCloudLoading(true);
+
+    // Try to load existing cloud data
+    const userId = parseJwt(newSession.access_token)?.sub;
+    if (userId) {
+      const cloudData = await sbLoadData(newSession.access_token, userId);
+      if (cloudData?.user_profile) {
+        // Returning user — restore their data
+        const p = cloudData.user_profile;
+        lsSet('im_user', p);
+        setUser(p);
+        if (cloudData.food_log)      lsSet('im_foodLog',       cloudData.food_log);
+        if (cloudData.sessions)      lsSet('im_sessions',      cloudData.sessions);
+        if (cloudData.body_metrics)  lsSet('im_bodyMetrics',   cloudData.body_metrics);
+        if (cloudData.sleep_log)     lsSet('im_sleepLog',      cloudData.sleep_log);
+        if (cloudData.favorites)     lsSet('im_favorites',     cloudData.favorites);
+        if (cloudData.profiles)      lsSet('oja_profiles',     cloudData.profiles);
+        if (cloudData.cardio_log)    lsSet('im_cardioLog',     cloudData.cardio_log);
+        if (cloudData.custom_workouts) lsSet('im_customWorkouts', cloudData.custom_workouts);
+        setCloudLoading(false);
+        setWelcomed(false); // show welcome back screen
+        return;
+      }
+    }
+
+    // New user — if name provided (from signup), pre-fill
+    if (name) lsSet('im_pending_name', name);
+    setCloudLoading(false);
   };
+
+  const handleComplete = async (d) => {
+    // Merge any pending name from Google/email signup
+    const pendingName = lsGet('im_pending_name', null);
+    const finalUser = pendingName ? { ...d, name: pendingName } : d;
+    try { localStorage.removeItem('im_pending_name'); } catch {}
+
+    lsSet('im_user', finalUser);
+    if (finalUser.calcedGoals) lsSet('oja_goals', finalUser.calcedGoals);
+    setUser(finalUser);
+    setWelcomed(true);
+
+    // Save to cloud if authenticated
+    if (session) {
+      const userId = parseJwt(session.access_token)?.sub;
+      if (userId) sbUpsertData(session.access_token, userId, { user_profile: finalUser });
+    }
+  };
+
+  if (!authReady) return null;
+
+  if (cloudLoading) return (
+    <div style={{ position:"fixed", inset:0, background:BLACK, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+      <YinYang size={60} className="spin-slow" style={{ marginBottom:20 }}/>
+      <div style={{ fontFamily:"'Bebas Neue'", fontSize:16, color:WHITE, letterSpacing:3 }}>LOADING YOUR DATA...</div>
+    </div>
+  );
 
   return (
     <>
       <style>{ANIM}</style>
-      {!user
-        ? <Onboarding onComplete={handleComplete}/>
-        : !welcomed
-          ? <WelcomeBack user={user} onContinue={()=>setWelcomed(true)}/>
-          : <MainApp user={user}/>
+      {!session
+        ? <AuthScreen onAuth={handleAuth}/>
+        : !user
+          ? <Onboarding onComplete={handleComplete}/>
+          : !welcomed
+            ? <WelcomeBack user={user} onContinue={()=>setWelcomed(true)}/>
+            : <MainApp user={user} session={session} onSignOut={async()=>{
+                await sbSignOut(session.access_token);
+                const keys=['im_session','im_user','im_foodLog','im_favorites','im_sessions',
+                  'im_bodyMetrics','im_sleepLog','im_customWorkouts','im_progressPhotos',
+                  'im_waterLog','im_prevScore','oja_goals','oja_profiles','im_cardioLog'];
+                keys.forEach(k=>{ try { localStorage.removeItem(k); } catch {} });
+                setSession(null); setUser(null); setWelcomed(false);
+              }}/>
       }
     </>
   );
+}
+
+// Decode JWT payload without a library
+function parseJwt(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    return JSON.parse(atob(base64));
+  } catch { return null; }
 }
