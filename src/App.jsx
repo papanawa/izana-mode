@@ -1429,10 +1429,11 @@ function RankUpCelebration({ rank, onDone }) {
 /* ── MAIN APP ────────────────────────────────────── */
 const DEFAULT_GOALS = { calories:2000, protein:150, carbs:200, fat:65 };
 const SAMPLE_WORKOUTS = [
-  { id:"push", name:"天 — Push Day",  exercises:["Bench Press","Overhead Press","Tricep Dips","Lateral Raises"] },
-  { id:"pull", name:"地 — Pull Day",  exercises:["Pull-Ups","Barbell Row","Face Pulls","Bicep Curls"] },
-  { id:"legs", name:"力 — Leg Day",   exercises:["Squat","Romanian Deadlift","Leg Press","Calf Raises"] },
-  { id:"full", name:"全 — Full Body", exercises:["Deadlift","Bench Press","Squat","Pull-Ups"] },
+  { id:"push",  name:"推 — Push",        exercises:["Bench Press","Incline Dumbbell Press","Overhead Press","Lateral Raises","Tricep Pushdowns","Skull Crushers"] },
+  { id:"pull",  name:"引 — Pull",        exercises:["Deadlift","Pull-Ups","Barbell Row","Face Pulls","Bicep Curls","Hammer Curls"] },
+  { id:"legs",  name:"脚 — Legs",        exercises:["Squat","Romanian Deadlift","Leg Press","Leg Curl","Leg Extension","Calf Raises"] },
+  { id:"upper", name:"上 — Upper Body",  exercises:["Bench Press","Barbell Row","Overhead Press","Pull-Ups","Lateral Raises","Tricep Dips"] },
+  { id:"lower", name:"下 — Lower Body",  exercises:["Squat","Romanian Deadlift","Leg Press","Leg Curl","Hip Thrust","Calf Raises"] },
 ];
 
 function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
