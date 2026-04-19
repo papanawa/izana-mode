@@ -1513,8 +1513,8 @@ function RankUpCelebration({ rank, onDone }) {
       <div style={{ fontFamily:"'Bebas Neue'", fontSize:120, color:rank.color, lineHeight:1, animation:"rankPulse 0.8s cubic-bezier(.22,1,.36,1) forwards", marginBottom:8 }}>{rank.kanji}</div>
       <div style={{ textAlign:"center", animation:"rankShine 0.6s ease 0.5s both" }}>
         <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:"#555", letterSpacing:5, marginBottom:8 }}>RANK UP</div>
-        <div style={{ fontFamily:"'Bebas Neue'", fontSize:38, color:WHITE, letterSpacing:3, lineHeight:1 }}>{rank.title}</div>
-        <div style={{ fontFamily:"'DM Sans'", fontSize:13, color:rank.color, marginTop:8, letterSpacing:2 }}>{rank.sub}</div>
+        <div style={{ fontFamily:"'Bebas Neue'", fontSize:38, color:WHITE, letterSpacing:3, lineHeight:1 }}>{rank.sub}</div>
+        <div style={{ fontFamily:"'DM Sans'", fontSize:13, color:rank.color, marginTop:8, letterSpacing:2 }}>{rank.title}</div>
       </div>
       {["天","代","横","浜"].map((k,i)=>(<div key={k} style={{ position:"absolute", fontFamily:"'Bebas Neue'", fontSize:28, color:rank.color, opacity:0.2, animation:`kanjiDrop 0.5s ease ${0.3+i*0.15}s both`, top:i<2?20:"auto", bottom:i>=2?20:"auto", left:i%2===0?20:"auto", right:i%2===1?20:"auto" }}>{k}</div>))}
       <div style={{ position:"absolute", bottom:40, fontSize:11, color:"#333", letterSpacing:2 }}>TAP TO CONTINUE</div>
@@ -1582,11 +1582,10 @@ const EXERCISE_INFO = {
   "Leg Press":                { primary:["quads","glutes"], secondary:["hamstrings"], tips:["Don't lock knees at top","Foot position changes emphasis","High feet = more glutes","Low feet = more quads"] },
   "Leg Curl":                 { primary:["hamstrings"], secondary:[], tips:["Full range of motion","Squeeze at peak contraction","Don't let hips rise off pad","Slow eccentric for growth"] },
   "Leg Extension":            { primary:["quads"], secondary:[], tips:["Full extension at top","Hold 1 second at peak","Don't swing weight up","Good warm-up or finisher"] },
-  "Hip Thrust":               { primary:["glutes"], secondary:["hamstrings"], tips:["Drive hips up explosively","Squeeze glutes hard at top","Chin tucked to chest","Bar pad for comfort"] },
+  "Hip Thrust":               { primary:["glutes"], secondary:["hamstrings"], tips:["Bar across hip crease with a pad for comfort","Drive through heels to full hip extension","Bench at mid-back height — chin tucked","Squeeze glutes hard and hold 1 second at top"] },
   "Bulgarian Split Squat":    { primary:["quads","glutes"], secondary:["hamstrings","core"], tips:["Rear foot elevated on bench","Most of weight on front leg","Keep torso upright","Humbling exercise — go light first"] },
   "Lunges":                   { primary:["quads","glutes"], secondary:["hamstrings","core"], tips:["Step long enough to get 90-degree knee","Keep front shin vertical","Can do walking or stationary","Don't let back knee slam floor"] },
   "Calf Raises":              { primary:["calves"], secondary:[], tips:["Full range — stretch at bottom","Hold at top for 1 second","Standing hits gastrocnemius more","Seated hits soleus more"] },
-  "Hip Thrust":               { primary:["glutes"], secondary:["hamstrings"], tips:["Bar across hip crease","Drive through heels","Full hip extension at top","Bench should be at mid-back height"] },
   "Plank":                    { primary:["core"], secondary:["glutes","shoulders"], tips:["Body in straight line","Don't let hips sag or pike","Breathe steadily throughout","Progress to weighted or RKC plank"] },
   "Crunches":                 { primary:["core"], secondary:[], tips:["Don't pull on neck","Exhale as you crunch up","Short range of motion is fine","Quality over quantity"] },
   "Leg Raises":               { primary:["core"], secondary:["hip_flexors"], tips:["Lower back stays pressed to bench","Control the descent","Tilt pelvis at top for full contraction","Bent knees makes it easier"] },
@@ -1748,7 +1747,6 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [mealPlan,setMealPlan]=useState(null);
   const [generatingPlan,setGeneratingPlan]=useState(false);
   const [healthSub,setHealthSub]=useState("metrics");
-  const [goals,setGoals]=useState(()=>lsGet('oja_goals', DEFAULT_GOALS));
   const [profiles,setProfiles]=useState(()=>{
     const saved=lsGet('oja_profiles',null);
     if(saved&&saved.length) return saved;
@@ -1768,12 +1766,14 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [showExercisePicker,setShowExercisePicker]=useState(false);
   const [exerciseSearch,setExerciseSearch]=useState("");
   const [exerciseDetail,setExerciseDetail]=useState(null);
+  const [workoutSeconds,setWorkoutSeconds]=useState(0);
+  const [restTimer,setRestTimer]=useState(null); // { seconds, max } | null
+  const [restDuration,setRestDuration]=useState(90); // default rest 90s
   const [logDate,setLogDate]=useState(()=>new Date().toDateString()); // food log history
   const [expandedSession,setExpandedSession]=useState(null); // workout history detail
   const [notifEnabled,setNotifEnabled]=useState(()=>lsGet('im_notifEnabled',false));
   const [bodyMeasurements,setBodyMeasurements]=useState(()=>lsGet('im_bodyMeasurements',[]));
   const [newMeasurement,setNewMeasurement]=useState({ chest:"", waist:"", hips:"", arms:"", thighs:"" });
-  const [newExName,setNewExName]=useState("");
   const [newWeight,setNewWeight]=useState("");
   const [newSleep,setNewSleep]=useState({ hours:"", quality:3, soreness:3 });
   const [planPrefs,setPlanPrefs]=useState({ restrictions:"", dietType:"None" });
@@ -1875,6 +1875,26 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
     }
     setPrevScore(activityScore);
   },[activityScore]);
+
+  // Workout timer — counts up while session is active
+  useEffect(()=>{
+    if(!activeSession) { setWorkoutSeconds(0); return; }
+    const interval = setInterval(()=>setWorkoutSeconds(s=>s+1), 1000);
+    return ()=>clearInterval(interval);
+  },[activeSession?.id]);
+
+  // Rest timer — counts down
+  useEffect(()=>{
+    if(!restTimer) return;
+    if(restTimer.seconds<=0){
+      // Vibrate if supported
+      try { navigator.vibrate?.([200,100,200]); } catch {}
+      setRestTimer(null);
+      return;
+    }
+    const t = setTimeout(()=>setRestTimer(r=>r?{...r,seconds:r.seconds-1}:null),1000);
+    return ()=>clearTimeout(t);
+  },[restTimer?.seconds]);
 
   // Reset water daily
   useEffect(()=>{
@@ -2044,10 +2064,27 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
   };
 
   const startWorkout=(t)=>{ setShowExercisePicker(false); setExerciseSearch(""); setTab("workout"); setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises:[], template:t.exercises||[] }); };
-  const addSet=(ei)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i===ei?{ ...ex, sets:[...ex.sets,{reps:"",weight:""}] }:ex) }));
-  const updateSet=(ei,si,f,v)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st,[f]:v }) }) }));
-  const addCustomEx=()=>{ if(!newExName.trim()) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:newExName.trim(), sets:[{reps:"",weight:""}] }] })); setNewExName(""); };
-  const finishWorkout=()=>{ setSessions(p=>[...p,{ ...activeSession, end:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), date:today }]); setActiveSession(null); };
+  const addSet=(ei)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i===ei?{ ...ex, sets:[...ex.sets,{reps:"",weight:"",done:false}] }:ex) }));
+  const updateSet=(ei,si,f,v)=>{
+    setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st,[f]:v }) }) }));
+  };
+  const toggleSetDone=(ei,si)=>{
+    setActiveSession(s=>({
+      ...s,
+      exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st, done:!st.done }) })
+    }));
+    // Start rest timer when marking a set done
+    setRestTimer(r=>r?null:{ seconds:restDuration, max:restDuration });
+  };
+  const formatTime=(s)=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+  const finishWorkout=()=>{
+    setSessions(p=>[...p,{ ...activeSession, end:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), date:today, duration:workoutSeconds }]);
+    // Auto-prompt to save if this was a My Build session
+    if(activeSession.name==="型 — My Build" && activeSession.exercises.length>0) {
+      setShowSaveWorkout(true);
+    }
+    setActiveSession(null); setRestTimer(null); setWorkoutSeconds(0);
+  };
 
   const goalLabel={ cut:"削 Cut", bulk:"増 Bulk", recomp:"変 Recomp", endure:"耐 Endure" };
 
@@ -2149,7 +2186,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             </div>
             <div style={{ flex:1 }}>
               <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:"#555", letterSpacing:3, marginBottom:2 }}>TENJIKU RANK</div>
-              <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:WHITE, letterSpacing:1, lineHeight:1 }}>{rank.title} <span style={{ fontSize:12, color:"#555" }}>· {rank.sub}</span></div>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:WHITE, letterSpacing:1, lineHeight:1 }}>{rank.sub} <span style={{ fontSize:12, color:"#555" }}>· {rank.title}</span></div>
               <div style={{ marginTop:8, height:3, background:"#222", overflow:"hidden" }}>
                 <div style={{ height:"100%", width:`${rankProgress}%`, background:rank.color, transition:"width 0.5s" }}/>
               </div>
@@ -2505,7 +2542,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <div>
                       <div style={{ fontWeight:600, fontSize:13 }}>{s.name}</div>
-                      <div style={{ fontSize:11, color:MUTED }}>{s.date} · {s.exercises?.length} exercises · {s.start}–{s.end}</div>
+                      <div style={{ fontSize:11, color:MUTED }}>{s.date} · {s.exercises?.length} exercises · {s.start}–{s.end}{s.duration?` · ${Math.round(s.duration/60)}min`:""}</div>
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       {s.exercises?.some(ex=>ex.sets?.some(st=>parseFloat(st.weight)>0&&personalRecords[ex.name]===parseFloat(st.weight)))&&
@@ -2540,7 +2577,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             ))}
           </div>}
           <div style={S.labelRed}>Quick Start</div>
-          <div style={{ fontSize:12, color:MUTED, marginBottom:10 }}>Pick a template to pre-load exercises, or start fresh and build your own.</div>
+          <div style={{ fontSize:12, color:MUTED, marginBottom:10 }}>Pick a template or build your own from scratch.</div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
             {SAMPLE_WORKOUTS.map(w=>(
               <button key={w.id} onClick={()=>startWorkout(w)}
@@ -2549,6 +2586,12 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{w.exercises.length} exercises · tap to load</div>
               </button>
             ))}
+            {/* My Build tile */}
+            <button onClick={()=>startWorkout({ name:"型 — My Build", exercises:[] })}
+              style={{ background:BLACK, border:`1px solid ${RED}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left" }}>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:16, letterSpacing:1, color:WHITE }}>型 — MY BUILD</div>
+              <div style={{ fontSize:10, color:RED, marginTop:2 }}>Start from scratch</div>
+            </button>
           </div>
           {customWorkouts.length>0&&<>
             <div style={S.label}>My Saved Workouts</div>
@@ -2564,15 +2607,42 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               ))}
             </div>
           </>}
-          <button style={S.btnBlack} onClick={()=>startWorkout({ name:"My Workout", exercises:[] })}>+ Start Fresh</button>
+          
         </>)}
 
         {tab==="workout"&&activeSession&&(<>
+          {/* Rest Timer Overlay */}
+          {restTimer && (
+            <div style={{ background:BLACK, border:`2px solid ${RED}`, padding:"14px 16px", marginBottom:12, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:2 }}>REST TIMER</div>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:40, color:restTimer.seconds<=10?RED:WHITE, lineHeight:1 }}>{formatTime(restTimer.seconds)}</div>
+                {/* Progress bar */}
+                <div style={{ width:160, height:3, background:"#333", marginTop:6 }}>
+                  <div style={{ height:"100%", background:RED, width:`${(restTimer.seconds/restTimer.max)*100}%`, transition:"width 1s linear" }}/>
+                </div>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                <button onClick={()=>setRestTimer(null)} style={{ background:RED, color:WHITE, border:"none", padding:"8px 14px", fontFamily:"'Bebas Neue'", fontSize:13, letterSpacing:1, cursor:"pointer" }}>Skip</button>
+                <div style={{ display:"flex", gap:4 }}>
+                  {[60,90,120].map(s=>(
+                    <button key={s} onClick={()=>setRestTimer({seconds:s,max:s})}
+                      style={{ flex:1, background:"transparent", color:MUTED, border:`1px solid #333`, fontSize:10, fontFamily:"'Bebas Neue'", padding:"4px 2px", cursor:"pointer", letterSpacing:0.5 }}>
+                      {s}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Session header */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
             <div>
               <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, letterSpacing:1 }}>{activeSession.name}</div>
-              <div style={{ fontSize:11, color:MUTED }}>Started {activeSession.start} · {activeSession.exercises.length} exercise{activeSession.exercises.length!==1?"s":""}</div>
+              <div style={{ fontSize:11, color:MUTED }}>
+                {activeSession.exercises.length} exercise{activeSession.exercises.length!==1?"s":""} · <span style={{ color:RED, fontFamily:"'Bebas Neue'", fontSize:13 }}>{formatTime(workoutSeconds)}</span>
+              </div>
             </div>
             <button style={{ ...S.btnSm, color:RED }} onClick={()=>setActiveSession(null)}>Quit</button>
           </div>
@@ -2603,13 +2673,18 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 <span style={{ flex:0.4, fontSize:9, color:MUTED, textAlign:"center", letterSpacing:1 }}>SET</span>
                 <span style={{ flex:1, fontSize:9, color:MUTED, textAlign:"center", letterSpacing:1 }}>REPS</span>
                 <span style={{ flex:1, fontSize:9, color:MUTED, textAlign:"center", letterSpacing:1 }}>LBS</span>
+                <span style={{ flex:0.4, fontSize:9, color:MUTED, textAlign:"center", letterSpacing:1 }}>✓</span>
                 <span style={{ flex:0.3 }}/>
               </div>
               {ex.sets.map((st,si)=>(
-                <div key={si} style={{ ...S.setRow, alignItems:"center" }}>
-                  <span style={{ flex:0.4, fontFamily:"'Bebas Neue'", fontSize:17, color:MUTED, textAlign:"center" }}>{si+1}</span>
+                <div key={si} style={{ ...S.setRow, alignItems:"center", opacity:st.done?0.55:1, background:st.done?`${RED}08`:"transparent", borderLeft:st.done?`2px solid ${RED}`:"2px solid transparent", paddingLeft:st.done?6:0, marginBottom:4, transition:"all 0.2s" }}>
+                  <span style={{ flex:0.4, fontFamily:"'Bebas Neue'", fontSize:17, color:st.done?RED:MUTED, textAlign:"center" }}>{si+1}</span>
                   <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.reps} inputMode="numeric" onChange={e=>updateSet(ei,si,"reps",e.target.value)}/>
                   <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.weight} inputMode="decimal" onChange={e=>updateSet(ei,si,"weight",e.target.value)}/>
+                  <button onClick={()=>toggleSetDone(ei,si)}
+                    style={{ flex:0.4, background:st.done?RED:"transparent", border:`1px solid ${st.done?RED:BORDER}`, color:st.done?WHITE:MUTED, cursor:"pointer", fontSize:13, padding:"6px 0", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    {st.done?"✓":"○"}
+                  </button>
                   <button onClick={()=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex2,i)=>i!==ei?ex2:{ ...ex2, sets:ex2.sets.filter((_,j)=>j!==si) }) }))}
                     style={{ flex:0.3, background:"transparent", border:"none", color:MUTED, cursor:"pointer", fontSize:13 }}>✕</button>
                 </div>
@@ -2690,6 +2765,17 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
 
           {/* Save & Finish */}
           {!showExercisePicker&&<>
+            {/* Rest duration selector */}
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+              <span style={{ fontSize:11, color:MUTED, flexShrink:0 }}>Rest timer:</span>
+              {[60,90,120,180].map(s=>(
+                <button key={s} onClick={()=>setRestDuration(s)}
+                  style={{ flex:1, padding:"6px 0", fontFamily:"'Bebas Neue'", fontSize:12, background:restDuration===s?RED:CARD2, color:restDuration===s?WHITE:MUTED, border:`1px solid ${restDuration===s?RED:BORDER}`, cursor:"pointer" }}>
+                  {s<60?`${s}s`:`${s/60}${s%60?`.${s%60}`:""}m`}
+                </button>
+              ))}
+            </div>
+
             {showSaveWorkout
               ? <div style={{ ...S.card, display:"flex", gap:8 }}>
                   <input style={{ ...S.input, flex:1 }} placeholder="Name this workout..." value={saveWorkoutName} onChange={e=>setSaveWorkoutName(e.target.value)} autoFocus/>
@@ -2698,7 +2784,9 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 </div>
               : <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>setShowSaveWorkout(true)}>💾 Save as Template</button>
             }
-            <button style={S.btn} onClick={finishWorkout}>✓ Finish Workout</button>
+            <button style={S.btn} onClick={finishWorkout}>
+              ✓ Finish Workout · {formatTime(workoutSeconds)}
+            </button>
           </>}
         </>)}
 
