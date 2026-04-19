@@ -2070,7 +2070,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
     setNewSleep({ hours:"", quality:3, soreness:3 });
   };
 
-  const startWorkout=(t)=>{ setShowExercisePicker(false); setExerciseSearch(""); setTab("workout"); setWorkoutSeconds(0); setTimerRunning(false); setRestTimer(null); setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises:[], template:t.exercises||[] }); };
+  const startWorkout=(t, loadExercises=false)=>{ setShowExercisePicker(false); setExerciseSearch(""); setTab("workout"); setWorkoutSeconds(0); setTimerRunning(false); setRestTimer(null); setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises: loadExercises ? t.exercises.map(n=>({ name:n, sets:[{reps:"",weight:"",done:false}] })) : [], template:t.exercises||[] }); };
   const addSet=(ei)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i===ei?{ ...ex, sets:[...ex.sets,{reps:"",weight:"",done:false}] }:ex) }));
   const updateSet=(ei,si,f,v)=>{
     setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st,[f]:v }) }) }));
@@ -2606,8 +2606,8 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <div style={S.label}>My Saved Workouts</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
               {customWorkouts.map(w=>(
-                <button key={w.id} onClick={()=>startWorkout(w)}
-                  style={{ background:CARD, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left", position:"relative" }}>
+                <button key={w.id} onClick={()=>startWorkout(w, true)}
+                  style={{ background:CARD, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left", width:"calc(50% - 4px)", boxSizing:"border-box", position:"relative" }}>
                   <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, letterSpacing:1, color:TEXT }}>{w.name}</div>
                   <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{w.exercises.length} exercises</div>
                   <span onClick={e=>{ e.stopPropagation(); setCustomWorkouts(p=>p.filter(x=>x.id!==w.id)); }}
