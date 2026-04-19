@@ -5,8 +5,8 @@
 // IMPORTANT: The anon key is safe to expose in frontend code.
 // Row Level Security (RLS) on the database protects your data.
 
-export const SUPABASE_URL  = "https://bnsxjgluydwfwqrjcktc.supabase.co";
-export const SUPABASE_ANON = "sb_publishable_zt2GPYa7vyZ97EcZx6vftA_i53WaivP";
+export const SUPABASE_URL  = "YOUR_SUPABASE_URL_HERE";
+export const SUPABASE_ANON = "YOUR_SUPABASE_ANON_KEY_HERE";
 
 // ── SUPABASE HELPERS ──────────────────────────────────────────────────────────
 // Lightweight fetch wrappers — no SDK needed, keeps bundle small.
@@ -108,4 +108,81 @@ export const sbDeleteAccount = async (token, userId) => {
     headers: { "Content-Type":"application/json" },
     body: JSON.stringify({ user_id: userId, token }),
   });
+};
+
+// ── FRIENDS & LEADERBOARD ─────────────────────────────────────────────────────
+
+// Search users by name or email (uses profiles table)
+export const sbSearchUsers = async (token, query) => {
+  const q = encodeURIComponent(`%${query}%`);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?or=(name.ilike.${q},email.ilike.${q})&select=id,name,email&limit=10`, {
+    headers: headers(token),
+  });
+  return r.ok ? r.json() : [];
+};
+
+// Send friend request
+export const sbSendFriendRequest = async (token, fromId, toId) => {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/friends`, {
+    method: "POST",
+    headers: { ...headers(token), "Prefer": "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify({ user_id: fromId, friend_id: toId, status: "pending" }),
+  });
+  return r.ok;
+};
+
+// Accept friend request
+export const sbAcceptFriend = async (token, fromId, myId) => {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/friends?user_id=eq.${fromId}&friend_id=eq.${myId}`, {
+    method: "PATCH",
+    headers: { ...headers(token), "Prefer": "return=minimal" },
+    body: JSON.stringify({ status: "accepted" }),
+  });
+  return r.ok;
+};
+
+// Decline / remove friend
+export const sbRemoveFriend = async (token, userId, friendId) => {
+  await fetch(`${SUPABASE_URL}/rest/v1/friends?user_id=eq.${userId}&friend_id=eq.${friendId}`, {
+    method: "DELETE", headers: headers(token),
+  });
+  await fetch(`${SUPABASE_URL}/rest/v1/friends?user_id=eq.${friendId}&friend_id=eq.${userId}`, {
+    method: "DELETE", headers: headers(token),
+  });
+};
+
+// Get all my friend records (pending + accepted)
+export const sbGetFriends = async (token, userId) => {
+  const [sent, received] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/friends?user_id=eq.${userId}&select=*,profiles!friend_id(id,name,email)`, { headers: headers(token) }).then(r=>r.ok?r.json():[]),
+    fetch(`${SUPABASE_URL}/rest/v1/friends?friend_id=eq.${userId}&select=*,profiles!user_id(id,name,email)`, { headers: headers(token) }).then(r=>r.ok?r.json():[]),
+  ]);
+  return { sent, received };
+};
+
+// Get leaderboard data for a user + their friends
+export const sbGetLeaderboard = async (token, userId) => {
+  // Get accepted friend IDs
+  const { sent, received } = await sbGetFriends(token, userId);
+  const friendIds = [
+    ...sent.filter(f=>f.status==="accepted").map(f=>f.friend_id),
+    ...received.filter(f=>f.status==="accepted").map(f=>f.user_id),
+    userId,
+  ];
+  if (!friendIds.length) return [];
+  const ids = friendIds.map(id=>`"${id}"`).join(",");
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/user_data?user_id=in.(${ids})&select=user_id,profiles,sessions,food_log,sleep_log`, {
+    headers: headers(token),
+  });
+  return r.ok ? r.json() : [];
+};
+
+// Upsert user into public profiles table (enables friend search)
+export const sbUpsertProfile = async (token, userId, name, email) => {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+    method: "POST",
+    headers: { ...headers(token), "Prefer": "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ id: userId, name, email, updated_at: new Date().toISOString() }),
+  });
+  return r.ok;
 };

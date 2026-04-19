@@ -2,7 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import {
   sbSignUp, sbSignIn, sbSignInGoogle, sbSignOut,
   sbGetSessionFromHash, sbRefreshToken,
-  sbUpsertData, sbLoadData, sbDeleteAccount
+  sbUpsertData, sbLoadData, sbDeleteAccount,
+  sbSearchUsers, sbSendFriendRequest, sbAcceptFriend,
+  sbRemoveFriend, sbGetFriends, sbGetLeaderboard, sbUpsertProfile,
 } from "./supabase.js";
 
 const RED     = "#C41E2A";
@@ -1556,6 +1558,237 @@ function RankUpCelebration({ rank, onDone }) {
 }
 
 /* ── VOLUME PANEL ────────────────────────────────── */
+/* ── FRIENDS & LEADERBOARD PANEL ─────────────────── */
+function FriendsPanel({ user, session, onClose }) {
+  const [sub, setSub] = useState("friends"); // friends | leaderboard
+  const [search, setSearch] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [friends, setFriends] = useState({ sent:[], received:[] });
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [loadingBoard, setLoadingBoard] = useState(false);
+  const [msg, setMsg] = useState("");
+  const userId = user?.id;
+  const token = session?.access_token;
+
+  useEffect(()=>{ loadFriends(); },[]);
+
+  const loadFriends = async () => {
+    if (!token||!userId) return;
+    try { setFriends(await sbGetFriends(token, userId)); } catch {}
+  };
+
+  const loadLeaderboard = async () => {
+    if (!token||!userId) return;
+    setLoadingBoard(true);
+    try {
+      const data = await sbGetLeaderboard(token, userId);
+      // Parse and rank
+      const rows = data.map(row => {
+        const prof = typeof row.profiles === "string" ? JSON.parse(row.profiles||"{}") : (row.profiles||{});
+        const sessions = Array.isArray(row.sessions) ? row.sessions : (JSON.parse(row.sessions||"[]"));
+        const weekAgo = Date.now() - 7*24*60*60*1000;
+        const weeklyWorkouts = sessions.filter(s => new Date(s.date||0).getTime() > weekAgo).length;
+        const streak = sessions.length; // simplified — total sessions as proxy
+        return { id:row.user_id, name:prof.name||"Unknown", weeklyWorkouts, totalSessions:sessions.length, isMe:row.user_id===userId };
+      }).sort((a,b)=>b.weeklyWorkouts-a.weeklyWorkouts);
+      setLeaderboard(rows);
+    } catch { setMsg("Couldn't load leaderboard"); }
+    setLoadingBoard(false);
+  };
+
+  const doSearch = async () => {
+    if (!search.trim()||!token) return;
+    setSearching(true); setResults([]);
+    try {
+      const res = await sbSearchUsers(token, search.trim());
+      setResults(res.filter(r=>r.id!==userId));
+    } catch { setMsg("Search failed"); }
+    setSearching(false);
+  };
+
+  const sendRequest = async (toId, toName) => {
+    const ok = await sbSendFriendRequest(token, userId, toId);
+    if (ok) { setMsg(`Request sent to ${toName}!`); setResults([]); setSearch(""); await loadFriends(); }
+    else setMsg("Couldn't send request");
+    setTimeout(()=>setMsg(""),3000);
+  };
+
+  const accept = async (fromId) => {
+    await sbAcceptFriend(token, fromId, userId);
+    await loadFriends();
+    if (sub==="leaderboard") loadLeaderboard();
+  };
+
+  const remove = async (fId) => {
+    await sbRemoveFriend(token, userId, fId);
+    await loadFriends();
+  };
+
+  const accepted = [
+    ...friends.sent.filter(f=>f.status==="accepted"),
+    ...friends.received.filter(f=>f.status==="accepted"),
+  ];
+  const pending = friends.received.filter(f=>f.status==="pending");
+  const awaitingReply = friends.sent.filter(f=>f.status==="pending");
+
+  const getFriendName = (f, direction) => {
+    const p = direction==="sent" ? f["profiles!friend_id"] : f["profiles!user_id"];
+    return p?.name || p?.email || "Unknown";
+  };
+  const getFriendId = (f, direction) => direction==="sent" ? f.friend_id : f.user_id;
+
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:600, display:"flex", flexDirection:"column" }}>
+      <div style={{ flex:1, background:"rgba(0,0,0,0.6)" }} onClick={onClose}/>
+      <div style={{ background:BLACK, maxHeight:"92vh", display:"flex", flexDirection:"column", animation:"slideUp 0.35s cubic-bezier(.22,1,.36,1)" }}>
+        {/* Header */}
+        <div style={{ background:"#111", padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`2px solid ${RED}` }}>
+          <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:WHITE, letterSpacing:2 }}>友 FRIENDS</div>
+          <button onClick={onClose} style={{ background:"transparent", border:"none", color:"#555", fontSize:22, cursor:"pointer" }}>✕</button>
+        </div>
+        {/* Sub tabs */}
+        <div style={{ display:"flex", borderBottom:`1px solid #222` }}>
+          {[{id:"friends",label:"Friends"},{id:"leaderboard",label:"🏆 Leaderboard"}].map(t=>(
+            <button key={t.id} onClick={()=>{ setSub(t.id); if(t.id==="leaderboard") loadLeaderboard(); }}
+              style={{ flex:1, padding:"10px", fontFamily:"'Bebas Neue'", fontSize:13, letterSpacing:1.5,
+                color:sub===t.id?RED:MUTED, background:"transparent", border:"none",
+                borderBottom:`2px solid ${sub===t.id?RED:"transparent"}`, cursor:"pointer" }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ overflowY:"auto", padding:"14px", flex:1 }}>
+          {msg && <div style={{ background:`${RED}22`, border:`1px solid ${RED}`, color:RED, fontSize:12, padding:"8px 12px", marginBottom:12 }}>{msg}</div>}
+
+          {sub==="friends" && (<>
+            {/* Search */}
+            <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:8 }}>FIND PEOPLE</div>
+            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              <input value={search} onChange={e=>setSearch(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&doSearch()}
+                placeholder="Search by name or email..."
+                style={{ flex:1, background:"#1a1a1a", border:`1px solid #333`, borderBottom:`2px solid ${RED}`, color:WHITE, padding:"9px 10px", fontSize:13, outline:"none", fontFamily:"DM Sans" }}/>
+              <button onClick={doSearch} disabled={searching}
+                style={{ background:RED, color:WHITE, border:"none", padding:"9px 14px", fontFamily:"'Bebas Neue'", fontSize:13, letterSpacing:1, cursor:"pointer" }}>
+                {searching?"...":"GO"}
+              </button>
+            </div>
+            {results.length>0&&<div style={{ marginBottom:16 }}>
+              {results.map(r=>{
+                const alreadySent = friends.sent.find(f=>f.friend_id===r.id);
+                const alreadyFriend = accepted.find(f=>getFriendId(f,"sent")===r.id||getFriendId(f,"received")===r.id);
+                return (
+                  <div key={r.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", background:"#111", border:`1px solid #2a2a2a`, marginBottom:6 }}>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:13, color:WHITE }}>{r.name||"Unknown"}</div>
+                      <div style={{ fontSize:11, color:MUTED }}>{r.email}</div>
+                    </div>
+                    {alreadyFriend
+                      ? <span style={{ fontSize:11, color:MUTED }}>Already friends</span>
+                      : alreadySent
+                      ? <span style={{ fontSize:11, color:MUTED }}>Request sent</span>
+                      : <button onClick={()=>sendRequest(r.id, r.name||r.email)}
+                          style={{ background:RED, color:WHITE, border:"none", padding:"6px 14px", fontFamily:"'Bebas Neue'", fontSize:12, letterSpacing:1, cursor:"pointer" }}>
+                          + ADD
+                        </button>
+                    }
+                  </div>
+                );
+              })}
+            </div>}
+
+            {/* Pending incoming */}
+            {pending.length>0&&<>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:8 }}>FRIEND REQUESTS ({pending.length})</div>
+              {pending.map(f=>(
+                <div key={f.user_id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", background:"#111", border:`1px solid ${RED}33`, marginBottom:6 }}>
+                  <div style={{ fontSize:13, color:WHITE }}>{getFriendName(f,"received")}</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={()=>accept(f.user_id)}
+                      style={{ background:RED, color:WHITE, border:"none", padding:"6px 12px", fontFamily:"'Bebas Neue'", fontSize:12, letterSpacing:1, cursor:"pointer" }}>✓ Accept</button>
+                    <button onClick={()=>remove(f.user_id)}
+                      style={{ background:"transparent", color:MUTED, border:`1px solid #333`, padding:"6px 10px", fontSize:11, cursor:"pointer" }}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </>}
+
+            {/* Awaiting reply */}
+            {awaitingReply.length>0&&<>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:8, marginTop:8 }}>AWAITING REPLY</div>
+              {awaitingReply.map(f=>(
+                <div key={f.friend_id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", background:"#111", border:`1px solid #2a2a2a`, marginBottom:6 }}>
+                  <div style={{ fontSize:13, color:MUTED }}>{getFriendName(f,"sent")}</div>
+                  <button onClick={()=>remove(f.friend_id)}
+                    style={{ background:"transparent", color:MUTED, border:`1px solid #333`, padding:"5px 10px", fontSize:11, cursor:"pointer" }}>Cancel</button>
+                </div>
+              ))}
+            </>}
+
+            {/* Accepted friends */}
+            {accepted.length>0&&<>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:8, marginTop:8 }}>MY CREW ({accepted.length})</div>
+              {accepted.map((f,i)=>{
+                const dir = friends.sent.find(s=>s===f) ? "sent" : "received";
+                const name = getFriendName(f, dir);
+                const fId = getFriendId(f, dir);
+                return (
+                  <div key={fId||i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", background:"#111", border:`1px solid #2a2a2a`, marginBottom:6 }}>
+                    <div>
+                      <div style={{ fontFamily:"'Bebas Neue'", fontSize:14, color:WHITE, letterSpacing:1 }}>{name}</div>
+                    </div>
+                    <button onClick={()=>remove(fId)}
+                      style={{ background:"transparent", color:MUTED, border:`1px solid #333`, padding:"5px 10px", fontSize:11, cursor:"pointer" }}>Remove</button>
+                  </div>
+                );
+              })}
+            </>}
+
+            {accepted.length===0&&pending.length===0&&awaitingReply.length===0&&results.length===0&&(
+              <div style={{ textAlign:"center", padding:"32px 20px", color:MUTED, fontSize:13 }}>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:32, color:"#333", marginBottom:8 }}>友</div>
+                Search for people to add them to your crew
+              </div>
+            )}
+          </>)}
+
+          {sub==="leaderboard"&&(<>
+            <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:12 }}>THIS WEEK — YOUR CREW</div>
+            {loadingBoard
+              ? <div style={{ textAlign:"center", padding:"32px", color:MUTED }}>Loading...</div>
+              : leaderboard.length===0
+              ? <div style={{ textAlign:"center", padding:"32px 20px", color:MUTED, fontSize:13 }}>
+                  Add friends to see the leaderboard
+                </div>
+              : leaderboard.map((row,i)=>(
+                <div key={row.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:row.isMe?"#1a0a0a":"#111", border:`1px solid ${row.isMe?RED+"44":"#2a2a2a"}`, marginBottom:6 }}>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:i===0?RED:i===1?"#aaa":i===2?"#c87533":MUTED, width:28, textAlign:"center" }}>
+                    {i===0?"1":i===1?"2":i===2?"3":`${i+1}`}
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, color:row.isMe?RED:WHITE, letterSpacing:1 }}>
+                      {row.name}{row.isMe?" (You)":""}
+                    </div>
+                    <div style={{ fontSize:11, color:MUTED }}>{row.totalSessions} total sessions</div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:22, color:row.weeklyWorkouts>0?RED:MUTED }}>{row.weeklyWorkouts}</div>
+                    <div style={{ fontSize:10, color:MUTED }}>workouts this week</div>
+                  </div>
+                </div>
+              ))
+            }
+            {!loadingBoard&&leaderboard.length>0&&(
+              <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:8 }}>Ranked by workouts completed this week · Only you and your friends</div>
+            )}
+          </>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VolumePanelSection({ sessions, volumeExercise, setVolumeExercise }) {
   if (sessions.length < 2) return null;
   const allExercises = [...new Set(
@@ -1658,72 +1891,272 @@ const EXERCISE_INFO = {
 
 /* ── MUSCLE BODY DIAGRAM ─────────────────────────── */
 function MuscleBodyDiagram({ primary=[], secondary=[] }) {
-  const c  = (m) => primary.includes(m) ? RED : secondary.includes(m) ? "#E8836B" : "#2a2a2a";
-  const cs = (m) => primary.includes(m) ? RED : secondary.includes(m) ? "#c06040" : "#3a3a3a";
-  const chestCol = primary.includes("chest")||primary.includes("lower_chest") ? RED : secondary.includes("chest")||secondary.includes("lower_chest") ? "#E8836B" : "#2a2a2a";
-  const chestStk = primary.includes("chest")||primary.includes("lower_chest") ? RED : secondary.includes("chest")||secondary.includes("lower_chest") ? "#c06040" : "#3a3a3a";
+  const hit  = (m) => primary.includes(m) ? RED : secondary.includes(m) ? "#E8836B" : "#1c1c1c";
+  const hit2 = (m) => primary.includes(m) ? "#ff4444" : secondary.includes(m) ? "#d4693a" : "#252525";
+  const str  = (m) => primary.includes(m) ? RED : secondary.includes(m) ? "#c06040" : "#2e2e2e";
+  const chestFill = primary.includes("chest")||primary.includes("lower_chest") ? RED : secondary.includes("chest")||secondary.includes("lower_chest") ? "#E8836B" : "#1c1c1c";
+  const chestStr  = primary.includes("chest")||primary.includes("lower_chest") ? RED : secondary.includes("chest")||secondary.includes("lower_chest") ? "#c06040" : "#2e2e2e";
+
   return (
-    <svg viewBox="0 0 220 242" width="100%" style={{ maxHeight:300, display:"block", margin:"0 auto" }}>
-      {/* FRONT */}
-      <ellipse cx="60" cy="18" rx="12" ry="14" fill="#222" stroke="#444" strokeWidth="0.8"/>
-      <path d="M55,30 Q60,36 65,30 L66,40 Q60,44 54,40 Z" fill="#1e1e1e" stroke="#333" strokeWidth="0.5"/>
-      <path d="M34,47 Q24,50 22,60 Q22,70 30,72 Q36,70 38,62 Q38,52 34,47 Z" fill={c("front_delt")} stroke={cs("front_delt")} strokeWidth="0.6"/>
-      <path d="M86,47 Q96,50 98,60 Q98,70 90,72 Q84,70 82,62 Q82,52 86,47 Z" fill={c("front_delt")} stroke={cs("front_delt")} strokeWidth="0.6"/>
-      <ellipse cx="22" cy="61" rx="5" ry="7" fill={c("side_delt")} stroke={cs("side_delt")} strokeWidth="0.5"/>
-      <ellipse cx="98" cy="61" rx="5" ry="7" fill={c("side_delt")} stroke={cs("side_delt")} strokeWidth="0.5"/>
-      <path d="M38,44 Q60,38 82,44 Q86,56 78,64 Q60,68 42,64 Q34,56 38,44 Z" fill={c("upper_chest")} stroke={cs("upper_chest")} strokeWidth="0.6"/>
-      <path d="M40,62 Q60,68 80,62 Q80,76 70,80 Q60,83 50,80 Q40,76 40,62 Z" fill={chestCol} stroke={chestStk} strokeWidth="0.6"/>
-      <path d="M24,66 Q19,72 19,82 Q19,92 24,95 Q28,96 31,91 Q33,84 32,74 Q31,66 27,64 Z" fill={c("biceps")} stroke={cs("biceps")} strokeWidth="0.5"/>
-      <path d="M96,66 Q101,72 101,82 Q101,92 96,95 Q92,96 89,91 Q87,84 88,74 Q89,66 93,64 Z" fill={c("biceps")} stroke={cs("biceps")} strokeWidth="0.5"/>
-      <path d="M20,95 Q17,103 17,112 Q18,119 22,120 Q26,120 28,116 Q30,108 29,100 Q28,94 24,93 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
-      <path d="M100,95 Q103,103 103,112 Q102,119 98,120 Q94,120 92,116 Q90,108 91,100 Q92,94 96,93 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
-      <path d="M48,80 Q60,77 72,80 L72,90 Q60,93 48,90 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.5"/>
-      <path d="M48,92 Q60,89 72,92 L72,102 Q60,105 48,102 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.5" opacity="0.9"/>
-      <path d="M48,104 Q60,101 72,104 L72,114 Q60,117 48,114 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.5" opacity="0.8"/>
-      <line x1="60" y1="80" x2="60" y2="116" stroke="#1a1a1a" strokeWidth="1.5"/>
-      <path d="M40,86 Q44,96 43,110 Q40,116 39,118 Q36,110 37,98 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.4" opacity="0.6"/>
-      <path d="M80,86 Q76,96 77,110 Q80,116 81,118 Q84,110 83,98 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.4" opacity="0.6"/>
-      <path d="M42,116 Q60,120 78,116 Q80,126 76,130 Q60,134 44,130 Q40,126 42,116 Z" fill="#222" stroke="#333" strokeWidth="0.5"/>
-      <path d="M44,130 Q38,136 37,152 Q36,165 40,170 Q46,175 51,169 Q54,160 53,146 Q52,134 46,130 Z" fill={c("quads")} stroke={cs("quads")} strokeWidth="0.6"/>
-      <path d="M50,130 Q55,134 56,150 Q56,163 52,170 Q47,175 44,170 Q40,163 41,150 Q42,136 46,130 Z" fill={c("quads")} stroke={cs("quads")} strokeWidth="0.6" opacity="0.85"/>
-      <path d="M76,130 Q82,136 83,152 Q84,165 80,170 Q74,175 69,169 Q66,160 67,146 Q68,134 74,130 Z" fill={c("quads")} stroke={cs("quads")} strokeWidth="0.6"/>
-      <path d="M70,130 Q65,134 64,150 Q64,163 68,170 Q73,175 76,170 Q80,163 79,150 Q78,136 74,130 Z" fill={c("quads")} stroke={cs("quads")} strokeWidth="0.6" opacity="0.85"/>
-      <ellipse cx="47" cy="172" rx="8" ry="6" fill="#1e1e1e" stroke="#3a3a3a" strokeWidth="0.5"/>
-      <ellipse cx="73" cy="172" rx="8" ry="6" fill="#1e1e1e" stroke="#3a3a3a" strokeWidth="0.5"/>
-      <path d="M40,178 Q36,188 37,202 Q38,212 43,215 Q47,216 50,212 Q52,203 51,190 Q49,180 44,177 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.5"/>
-      <path d="M70,178 Q74,188 73,202 Q72,212 67,215 Q63,216 60,212 Q58,203 59,190 Q61,180 66,177 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.5"/>
-      <ellipse cx="44" cy="217" rx="8" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
-      <ellipse cx="67" cy="217" rx="8" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
-      <text x="57" y="233" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"DM Sans", letterSpacing:2 }}>FRONT</text>
-      {/* BACK */}
-      <ellipse cx="163" cy="18" rx="12" ry="14" fill="#222" stroke="#444" strokeWidth="0.8"/>
-      <path d="M158,30 Q163,36 168,30 L169,40 Q163,44 157,40 Z" fill="#1e1e1e" stroke="#333" strokeWidth="0.5"/>
-      <path d="M140,42 Q163,36 186,42 Q190,52 184,60 Q174,56 163,55 Q152,56 142,60 Q136,52 140,42 Z" fill={c("traps")} stroke={cs("traps")} strokeWidth="0.6"/>
-      <path d="M132,50 Q122,53 120,63 Q120,72 128,74 Q134,72 136,63 Q136,52 132,50 Z" fill={c("rear_delt")} stroke={cs("rear_delt")} strokeWidth="0.6"/>
-      <path d="M194,50 Q204,53 206,63 Q206,72 198,74 Q192,72 190,63 Q190,52 194,50 Z" fill={c("rear_delt")} stroke={cs("rear_delt")} strokeWidth="0.6"/>
-      <path d="M123,68 Q119,76 119,86 Q119,96 123,98 Q127,99 130,94 Q132,86 131,76 Q130,68 126,66 Z" fill={c("triceps")} stroke={cs("triceps")} strokeWidth="0.5"/>
-      <path d="M203,68 Q207,76 207,86 Q207,96 203,98 Q199,99 196,94 Q194,86 195,76 Q196,68 200,66 Z" fill={c("triceps")} stroke={cs("triceps")} strokeWidth="0.5"/>
-      <path d="M120,98 Q117,106 117,114 Q118,120 122,121 Q126,120 128,114 Q129,106 127,98 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
-      <path d="M206,98 Q209,106 209,114 Q208,120 204,121 Q200,120 198,114 Q197,106 199,98 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
-      <path d="M137,56 Q130,66 128,82 Q127,96 132,106 Q138,112 144,108 Q148,98 147,82 Q147,66 141,56 Z" fill={c("lats")} stroke={cs("lats")} strokeWidth="0.6"/>
-      <path d="M189,56 Q196,66 198,82 Q199,96 194,106 Q188,112 182,108 Q178,98 179,82 Q179,66 185,56 Z" fill={c("lats")} stroke={cs("lats")} strokeWidth="0.6"/>
-      <path d="M144,56 Q163,52 182,56 Q184,68 182,76 Q163,80 144,76 Q142,68 144,56 Z" fill={c("mid_back")} stroke={cs("mid_back")} strokeWidth="0.6"/>
-      <path d="M150,86 Q163,82 176,86 Q178,100 176,112 Q163,116 150,112 Q148,100 150,86 Z" fill={c("lower_back")} stroke={cs("lower_back")} strokeWidth="0.6"/>
-      <path d="M146,116 Q138,122 136,134 Q136,147 142,151 Q150,155 157,151 Q162,144 160,132 Q158,120 150,115 Z" fill={c("glutes")} stroke={cs("glutes")} strokeWidth="0.6"/>
-      <path d="M180,116 Q188,122 190,134 Q190,147 184,151 Q176,155 169,151 Q164,144 166,132 Q168,120 176,115 Z" fill={c("glutes")} stroke={cs("glutes")} strokeWidth="0.6"/>
-      <path d="M138,150 Q132,158 132,170 Q132,180 136,184 Q142,188 147,183 Q150,174 149,162 Q148,152 142,149 Z" fill={c("hamstrings")} stroke={cs("hamstrings")} strokeWidth="0.6"/>
-      <path d="M147,149 Q151,158 150,172 Q150,183 146,186 Q140,188 137,184 Q133,178 133,168 Q133,156 140,150 Z" fill={c("hamstrings")} stroke={cs("hamstrings")} strokeWidth="0.6" opacity="0.85"/>
-      <path d="M188,150 Q194,158 194,170 Q194,180 190,184 Q184,188 179,183 Q176,174 177,162 Q178,152 184,149 Z" fill={c("hamstrings")} stroke={cs("hamstrings")} strokeWidth="0.6"/>
-      <path d="M179,149 Q175,158 175,172 Q175,183 179,186 Q185,188 188,184 Q192,178 192,168 Q192,156 185,150 Z" fill={c("hamstrings")} stroke={cs("hamstrings")} strokeWidth="0.6" opacity="0.85"/>
-      <ellipse cx="142" cy="187" rx="8" ry="6" fill="#1e1e1e" stroke="#3a3a3a" strokeWidth="0.5"/>
-      <ellipse cx="184" cy="187" rx="8" ry="6" fill="#1e1e1e" stroke="#3a3a3a" strokeWidth="0.5"/>
-      <path d="M135,193 Q130,203 131,214 Q132,221 137,223 Q142,224 145,219 Q147,210 146,200 Q144,192 139,191 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.6"/>
-      <path d="M140,191 Q144,200 143,212 Q142,220 138,223 Q134,222 132,218 Q130,210 131,200 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.6" opacity="0.8"/>
-      <path d="M191,193 Q196,203 195,214 Q194,221 189,223 Q184,224 181,219 Q179,210 180,200 Q182,192 187,191 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.6"/>
-      <path d="M186,191 Q182,200 183,212 Q184,220 188,223 Q192,222 194,218 Q196,210 195,200 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.6" opacity="0.8"/>
-      <ellipse cx="139" cy="225" rx="9" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
-      <ellipse cx="185" cy="225" rx="9" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
-      <text x="163" y="233" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"DM Sans", letterSpacing:2 }}>BACK</text>
+    <svg viewBox="0 0 260 310" width="100%" style={{ maxHeight:360, display:"block", margin:"0 auto", background:"transparent" }}>
+      <defs>
+        {/* Subtle inner glow for active muscles */}
+        <filter id="mg">
+          <feGaussianBlur stdDeviation="1.2" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+      </defs>
+
+      {/* ═══════════ FRONT BODY ═══════════ */}
+      {/* Head */}
+      <ellipse cx="65" cy="16" rx="13" ry="15" fill="#1a1a1a" stroke="#383838" strokeWidth="1"/>
+      <ellipse cx="65" cy="19" rx="8" ry="9" fill="#222" stroke="#333" strokeWidth="0.5"/>
+      {/* Neck */}
+      <path d="M58,29 Q65,34 72,29 L73,41 Q65,46 57,41 Z" fill="#1a1a1a" stroke="#2e2e2e" strokeWidth="0.5"/>
+
+      {/* ── Shoulders / Deltoids ── */}
+      {/* Left anterior delt — rounded cap */}
+      <path d="M36,44 Q26,46 22,54 Q19,62 22,70 Q26,76 32,75 Q38,73 40,65 Q42,55 38,46 Z"
+        fill={hit("front_delt")} stroke={str("front_delt")} strokeWidth="0.7"/>
+      {/* delt definition line */}
+      <path d="M30,52 Q32,62 33,72" fill="none" stroke={hit2("front_delt")} strokeWidth="0.6" opacity="0.5"/>
+      {/* Right anterior delt */}
+      <path d="M94,44 Q104,46 108,54 Q111,62 108,70 Q104,76 98,75 Q92,73 90,65 Q88,55 92,46 Z"
+        fill={hit("front_delt")} stroke={str("front_delt")} strokeWidth="0.7"/>
+      <path d="M100,52 Q98,62 97,72" fill="none" stroke={hit2("front_delt")} strokeWidth="0.6" opacity="0.5"/>
+      {/* Side delt caps */}
+      <ellipse cx="21" cy="62" rx="6" ry="9" fill={hit("side_delt")} stroke={str("side_delt")} strokeWidth="0.6"/>
+      <ellipse cx="109" cy="62" rx="6" ry="9" fill={hit("side_delt")} stroke={str("side_delt")} strokeWidth="0.6"/>
+
+      {/* ── Chest ── */}
+      {/* Upper pec left */}
+      <path d="M41,42 Q65,37 89,42 Q91,52 84,58 Q75,62 65,62 Q55,62 46,58 Q39,52 41,42 Z"
+        fill={hit("upper_chest")} stroke={str("upper_chest")} strokeWidth="0.7"/>
+      {/* Upper pec definition line */}
+      <path d="M48,48 Q65,45 82,48" fill="none" stroke={hit2("upper_chest")} strokeWidth="0.8" opacity="0.4"/>
+      {/* Lower pec left */}
+      <path d="M43,60 Q54,64 65,63 Q76,64 87,60 Q88,72 80,78 Q73,83 65,82 Q57,83 50,78 Q42,72 43,60 Z"
+        fill={chestFill} stroke={chestStr} strokeWidth="0.7"/>
+      {/* Lower pec shadow line — sternum crease */}
+      <path d="M65,62 L65,82" fill="none" stroke="#111" strokeWidth="1.5"/>
+      {/* Pec lower crease */}
+      <path d="M46,76 Q65,80 84,76" fill="none" stroke={hit2("chest")||hit2("lower_chest")||"#252525"} strokeWidth="0.8" opacity="0.5"/>
+
+      {/* ── Serratus ── */}
+      <path d="M41,68 Q38,74 38,84 Q38,96 42,102 Q46,98 46,86 Q46,74 44,66 Z"
+        fill="#1c1c1c" stroke="#2a2a2a" strokeWidth="0.4"/>
+      <path d="M89,68 Q92,74 92,84 Q92,96 88,102 Q84,98 84,86 Q84,74 86,66 Z"
+        fill="#1c1c1c" stroke="#2a2a2a" strokeWidth="0.4"/>
+      {/* serratus finger lines */}
+      {[74,80,86,92].map((y,i)=>(
+        <line key={i} x1={i%2===0?42:40} y1={y} x2={i%2===0?46:44} y2={y+4} stroke="#2a2a2a" strokeWidth="0.5" key={i}/>
+      ))}
+
+      {/* ── Biceps ── */}
+      {/* Left bicep — peaked shape */}
+      <path d="M24,72 Q19,78 18,88 Q18,98 22,102 Q26,105 30,102 Q34,96 33,84 Q32,74 28,70 Z"
+        fill={hit("biceps")} stroke={str("biceps")} strokeWidth="0.6"/>
+      {/* bicep peak line */}
+      <path d="M22,78 Q24,88 25,98" fill="none" stroke={hit2("biceps")} strokeWidth="0.7" opacity="0.5"/>
+      {/* Right bicep */}
+      <path d="M106,72 Q111,78 112,88 Q112,98 108,102 Q104,105 100,102 Q96,96 97,84 Q98,74 102,70 Z"
+        fill={hit("biceps")} stroke={str("biceps")} strokeWidth="0.6"/>
+      <path d="M108,78 Q106,88 105,98" fill="none" stroke={hit2("biceps")} strokeWidth="0.7" opacity="0.5"/>
+
+      {/* ── Forearms ── */}
+      <path d="M19,102 Q15,110 15,120 Q15,128 19,130 Q23,131 26,128 Q29,120 28,110 Q27,103 23,101 Z"
+        fill={hit("forearms")} stroke={str("forearms")} strokeWidth="0.5"/>
+      <path d="M111,102 Q115,110 115,120 Q115,128 111,130 Q107,131 104,128 Q101,120 102,110 Q103,103 107,101 Z"
+        fill={hit("forearms")} stroke={str("forearms")} strokeWidth="0.5"/>
+
+      {/* ── Abs / Core ── */}
+      {/* Ab bricks — 3 rows */}
+      {[[50,82,30,10],[50,94,30,10],[50,106,30,10]].map(([x,y,w,h],i)=>(
+        <g key={i}>
+          {/* left brick */}
+          <rect x={x} y={y} width={w/2-1} height={h} rx="2"
+            fill={hit("core")} stroke={str("core")} strokeWidth="0.5" opacity={1-i*0.05}/>
+          {/* right brick */}
+          <rect x={x+w/2+1} y={y} width={w/2-1} height={h} rx="2"
+            fill={hit("core")} stroke={str("core")} strokeWidth="0.5" opacity={1-i*0.05}/>
+          {/* inner definition */}
+          <rect x={x+2} y={y+2} width={w/2-5} height={h-4} rx="1"
+            fill="none" stroke={hit2("core")} strokeWidth="0.4" opacity="0.3"/>
+          <rect x={x+w/2+3} y={y+2} width={w/2-5} height={h-4} rx="1"
+            fill="none" stroke={hit2("core")} strokeWidth="0.4" opacity="0.3"/>
+        </g>
+      ))}
+      {/* Linea alba */}
+      <line x1="65" y1="82" x2="65" y2="118" stroke="#111" strokeWidth="2"/>
+      {/* Obliques */}
+      <path d="M42,88 Q46,98 45,112 Q43,118 41,120 Q38,112 39,100 Z"
+        fill={hit("core")} stroke={str("core")} strokeWidth="0.4" opacity="0.65"/>
+      <path d="M88,88 Q84,98 85,112 Q87,118 89,120 Q92,112 91,100 Z"
+        fill={hit("core")} stroke={str("core")} strokeWidth="0.4" opacity="0.65"/>
+
+      {/* ── Hip / Pelvis ── */}
+      <path d="M44,118 Q65,124 86,118 Q88,128 84,133 Q65,138 46,133 Q42,128 44,118 Z"
+        fill="#1a1a1a" stroke="#2e2e2e" strokeWidth="0.5"/>
+
+      {/* ── Quads ── */}
+      {/* Left leg — 4 heads visible */}
+      {/* Vastus lateralis */}
+      <path d="M44,132 Q38,140 36,158 Q35,172 39,178 Q45,183 50,177 Q54,168 53,152 Q52,138 46,132 Z"
+        fill={hit("quads")} stroke={str("quads")} strokeWidth="0.7"/>
+      {/* Rectus femoris */}
+      <path d="M50,131 Q56,136 57,154 Q57,168 53,177 Q49,181 46,177 Q42,170 42,156 Q43,140 48,131 Z"
+        fill={hit("quads")} stroke={str("quads")} strokeWidth="0.7" opacity="0.9"/>
+      {/* quad definition lines */}
+      <path d="M44,138 Q47,155 46,172" fill="none" stroke={hit2("quads")} strokeWidth="0.7" opacity="0.4"/>
+      <path d="M52,136 Q53,153 52,170" fill="none" stroke={hit2("quads")} strokeWidth="0.6" opacity="0.4"/>
+      {/* Right leg */}
+      <path d="M86,132 Q92,140 94,158 Q95,172 91,178 Q85,183 80,177 Q76,168 77,152 Q78,138 84,132 Z"
+        fill={hit("quads")} stroke={str("quads")} strokeWidth="0.7"/>
+      <path d="M80,131 Q74,136 73,154 Q73,168 77,177 Q81,181 84,177 Q88,170 88,156 Q87,140 82,131 Z"
+        fill={hit("quads")} stroke={str("quads")} strokeWidth="0.7" opacity="0.9"/>
+      <path d="M86,138 Q83,155 84,172" fill="none" stroke={hit2("quads")} strokeWidth="0.7" opacity="0.4"/>
+      <path d="M78,136 Q77,153 78,170" fill="none" stroke={hit2("quads")} strokeWidth="0.6" opacity="0.4"/>
+
+      {/* Knees */}
+      <ellipse cx="47" cy="180" rx="9" ry="7" fill="#181818" stroke="#303030" strokeWidth="0.6"/>
+      <ellipse cx="83" cy="180" rx="9" ry="7" fill="#181818" stroke="#303030" strokeWidth="0.6"/>
+      {/* kneecap highlight */}
+      <ellipse cx="47" cy="178" rx="5" ry="4" fill="#1f1f1f" stroke="#333" strokeWidth="0.4"/>
+      <ellipse cx="83" cy="178" rx="5" ry="4" fill="#1f1f1f" stroke="#333" strokeWidth="0.4"/>
+
+      {/* ── Calves ── */}
+      {/* Left gastrocnemius — two heads */}
+      <path d="M39,186 Q34,196 35,210 Q36,220 41,223 Q46,225 49,221 Q52,212 51,198 Q49,187 44,184 Z"
+        fill={hit("calves")} stroke={str("calves")} strokeWidth="0.6"/>
+      <path d="M44,184 Q48,194 48,208 Q47,219 44,222 Q40,221 38,216 Q36,208 37,196 Z"
+        fill={hit("calves")} stroke={str("calves")} strokeWidth="0.6" opacity="0.8"/>
+      {/* calf definition */}
+      <path d="M42,190 Q43,204 42,216" fill="none" stroke={hit2("calves")} strokeWidth="0.7" opacity="0.4"/>
+      {/* Right gastrocnemius */}
+      <path d="M91,186 Q96,196 95,210 Q94,220 89,223 Q84,225 81,221 Q78,212 79,198 Q81,187 86,184 Z"
+        fill={hit("calves")} stroke={str("calves")} strokeWidth="0.6"/>
+      <path d="M86,184 Q82,194 82,208 Q83,219 86,222 Q90,221 92,216 Q94,208 93,196 Z"
+        fill={hit("calves")} stroke={str("calves")} strokeWidth="0.6" opacity="0.8"/>
+      <path d="M88,190 Q87,204 88,216" fill="none" stroke={hit2("calves")} strokeWidth="0.7" opacity="0.4"/>
+
+      {/* Feet */}
+      <ellipse cx="43" cy="225" rx="9" ry="4" fill="#161616" stroke="#2a2a2a" strokeWidth="0.4"/>
+      <ellipse cx="87" cy="225" rx="9" ry="4" fill="#161616" stroke="#2a2a2a" strokeWidth="0.4"/>
+
+      <text x="65" y="242" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"DM Sans", letterSpacing:2 }}>FRONT</text>
+
+      {/* ═══════════ BACK BODY ═══════════ */}
+      {/* Head */}
+      <ellipse cx="195" cy="16" rx="13" ry="15" fill="#1a1a1a" stroke="#383838" strokeWidth="1"/>
+      <ellipse cx="195" cy="19" rx="8" ry="9" fill="#222" stroke="#333" strokeWidth="0.5"/>
+      {/* Neck */}
+      <path d="M188,29 Q195,34 202,29 L203,41 Q195,46 187,41 Z" fill="#1a1a1a" stroke="#2e2e2e" strokeWidth="0.5"/>
+
+      {/* ── Traps ── */}
+      <path d="M167,40 Q195,34 223,40 Q228,50 222,58 Q212,54 195,53 Q178,54 168,58 Q162,50 167,40 Z"
+        fill={hit("traps")} stroke={str("traps")} strokeWidth="0.7"/>
+      {/* trap definition — central ridge */}
+      <path d="M195,36 L195,58" fill="none" stroke={hit2("traps")} strokeWidth="0.8" opacity="0.4"/>
+      <path d="M175,44 Q185,48 195,46 Q205,48 215,44" fill="none" stroke={hit2("traps")} strokeWidth="0.6" opacity="0.3"/>
+
+      {/* ── Rear Delts ── */}
+      <path d="M159,48 Q149,52 147,62 Q147,72 155,74 Q161,73 163,64 Q164,54 161,49 Z"
+        fill={hit("rear_delt")} stroke={str("rear_delt")} strokeWidth="0.7"/>
+      <path d="M231,48 Q241,52 243,62 Q243,72 235,74 Q229,73 227,64 Q226,54 229,49 Z"
+        fill={hit("rear_delt")} stroke={str("rear_delt")} strokeWidth="0.7"/>
+
+      {/* ── Triceps ── */}
+      {/* Left — 3 heads implied */}
+      <path d="M150,66 Q145,74 145,86 Q145,97 149,100 Q153,102 157,97 Q160,88 159,76 Q158,67 154,64 Z"
+        fill={hit("triceps")} stroke={str("triceps")} strokeWidth="0.6"/>
+      <path d="M152,70 Q153,83 152,95" fill="none" stroke={hit2("triceps")} strokeWidth="0.7" opacity="0.45"/>
+      {/* Right */}
+      <path d="M240,66 Q245,74 245,86 Q245,97 241,100 Q237,102 233,97 Q230,88 231,76 Q232,67 236,64 Z"
+        fill={hit("triceps")} stroke={str("triceps")} strokeWidth="0.6"/>
+      <path d="M238,70 Q237,83 238,95" fill="none" stroke={hit2("triceps")} strokeWidth="0.7" opacity="0.45"/>
+
+      {/* ── Forearms back ── */}
+      <path d="M146,100 Q142,109 143,119 Q144,126 148,128 Q152,128 155,124 Q157,116 156,106 Q154,100 150,98 Z"
+        fill={hit("forearms")} stroke={str("forearms")} strokeWidth="0.5"/>
+      <path d="M244,100 Q248,109 247,119 Q246,126 242,128 Q238,128 235,124 Q233,116 234,106 Q236,100 240,98 Z"
+        fill={hit("forearms")} stroke={str("forearms")} strokeWidth="0.5"/>
+
+      {/* ── Lats ── */}
+      {/* Left lat — wing flare */}
+      <path d="M165,56 Q158,68 155,86 Q153,102 158,114 Q165,120 171,116 Q176,104 176,86 Q176,68 170,56 Z"
+        fill={hit("lats")} stroke={str("lats")} strokeWidth="0.7"/>
+      <path d="M162,64 Q159,84 161,106" fill="none" stroke={hit2("lats")} strokeWidth="0.8" opacity="0.4"/>
+      {/* Right lat */}
+      <path d="M225,56 Q232,68 235,86 Q237,102 232,114 Q225,120 219,116 Q214,104 214,86 Q214,68 220,56 Z"
+        fill={hit("lats")} stroke={str("lats")} strokeWidth="0.7"/>
+      <path d="M228,64 Q231,84 229,106" fill="none" stroke={hit2("lats")} strokeWidth="0.8" opacity="0.4"/>
+
+      {/* ── Mid Back / Rhomboids ── */}
+      <path d="M172,54 Q195,50 218,54 Q220,66 218,76 Q195,80 172,76 Q170,66 172,54 Z"
+        fill={hit("mid_back")} stroke={str("mid_back")} strokeWidth="0.7"/>
+      <path d="M180,58 Q195,56 210,58" fill="none" stroke={hit2("mid_back")} strokeWidth="0.7" opacity="0.35"/>
+      <path d="M178,68 Q195,66 212,68" fill="none" stroke={hit2("mid_back")} strokeWidth="0.6" opacity="0.3"/>
+
+      {/* ── Lower Back / Erectors ── */}
+      {/* Left erector */}
+      <path d="M183,84 Q179,92 179,108 Q179,118 183,122 Q187,124 190,120 Q192,112 192,98 Q191,88 187,84 Z"
+        fill={hit("lower_back")} stroke={str("lower_back")} strokeWidth="0.6"/>
+      {/* Right erector */}
+      <path d="M207,84 Q211,92 211,108 Q211,118 207,122 Q203,124 200,120 Q198,112 198,98 Q199,88 203,84 Z"
+        fill={hit("lower_back")} stroke={str("lower_back")} strokeWidth="0.6"/>
+      {/* erector definition */}
+      <path d="M186,88 Q186,104 186,118" fill="none" stroke={hit2("lower_back")} strokeWidth="0.6" opacity="0.4"/>
+      <path d="M204,88 Q204,104 204,118" fill="none" stroke={hit2("lower_back")} strokeWidth="0.6" opacity="0.4"/>
+
+      {/* ── Glutes ── */}
+      {/* Left glute — full rounded shape */}
+      <path d="M173,118 Q165,126 163,140 Q163,154 170,158 Q178,162 185,158 Q191,150 190,136 Q188,122 180,117 Z"
+        fill={hit("glutes")} stroke={str("glutes")} strokeWidth="0.7"/>
+      <path d="M170,126 Q170,140 172,152" fill="none" stroke={hit2("glutes")} strokeWidth="0.7" opacity="0.35"/>
+      {/* Right glute */}
+      <path d="M217,118 Q225,126 227,140 Q227,154 220,158 Q212,162 205,158 Q199,150 200,136 Q202,122 210,117 Z"
+        fill={hit("glutes")} stroke={str("glutes")} strokeWidth="0.7"/>
+      <path d="M220,126 Q220,140 218,152" fill="none" stroke={hit2("glutes")} strokeWidth="0.7" opacity="0.35"/>
+
+      {/* ── Hamstrings ── */}
+      {/* Left — bicep femoris + semis */}
+      <path d="M165,156 Q159,166 158,178 Q158,190 162,195 Q168,199 174,194 Q178,184 177,170 Q175,158 169,154 Z"
+        fill={hit("hamstrings")} stroke={str("hamstrings")} strokeWidth="0.7"/>
+      <path d="M173,154 Q178,164 178,178 Q178,190 174,196 Q169,198 166,194 Q162,186 163,172 Q164,160 170,155 Z"
+        fill={hit("hamstrings")} stroke={str("hamstrings")} strokeWidth="0.7" opacity="0.85"/>
+      <path d="M167,160 Q166,175 167,190" fill="none" stroke={hit2("hamstrings")} strokeWidth="0.7" opacity="0.4"/>
+      {/* Right */}
+      <path d="M225,156 Q231,166 232,178 Q232,190 228,195 Q222,199 216,194 Q212,184 213,170 Q215,158 221,154 Z"
+        fill={hit("hamstrings")} stroke={str("hamstrings")} strokeWidth="0.7"/>
+      <path d="M217,154 Q212,164 212,178 Q212,190 216,196 Q221,198 224,194 Q228,186 227,172 Q226,160 220,155 Z"
+        fill={hit("hamstrings")} stroke={str("hamstrings")} strokeWidth="0.7" opacity="0.85"/>
+      <path d="M223,160 Q224,175 223,190" fill="none" stroke={hit2("hamstrings")} strokeWidth="0.7" opacity="0.4"/>
+
+      {/* Knees back */}
+      <ellipse cx="168" cy="197" rx="9" ry="7" fill="#181818" stroke="#303030" strokeWidth="0.6"/>
+      <ellipse cx="222" cy="197" rx="9" ry="7" fill="#181818" stroke="#303030" strokeWidth="0.6"/>
+      <ellipse cx="168" cy="195" rx="5" ry="4" fill="#1f1f1f" stroke="#333" strokeWidth="0.4"/>
+      <ellipse cx="222" cy="195" rx="5" ry="4" fill="#1f1f1f" stroke="#333" strokeWidth="0.4"/>
+
+      {/* ── Calves back — gastrocnemius ── */}
+      {/* Left */}
+      <path d="M160,203 Q155,214 156,226 Q157,234 162,236 Q167,237 170,233 Q173,223 172,211 Q170,202 165,200 Z"
+        fill={hit("calves")} stroke={str("calves")} strokeWidth="0.6"/>
+      <path d="M165,200 Q169,210 169,224 Q168,232 165,236 Q161,235 159,230 Q157,222 158,210 Z"
+        fill={hit("calves")} stroke={str("calves")} strokeWidth="0.6" opacity="0.8"/>
+      <path d="M163,206 Q162,218 163,230" fill="none" stroke={hit2("calves")} strokeWidth="0.7" opacity="0.4"/>
+      {/* Right */}
+      <path d="M230,203 Q235,214 234,226 Q233,234 228,236 Q223,237 220,233 Q217,223 218,211 Q220,202 225,200 Z"
+        fill={hit("calves")} stroke={str("calves")} strokeWidth="0.6"/>
+      <path d="M225,200 Q221,210 221,224 Q222,232 225,236 Q229,235 231,230 Q233,222 232,210 Z"
+        fill={hit("calves")} stroke={str("calves")} strokeWidth="0.6" opacity="0.8"/>
+      <path d="M227,206 Q228,218 227,230" fill="none" stroke={hit2("calves")} strokeWidth="0.7" opacity="0.4"/>
+
+      {/* Feet */}
+      <ellipse cx="164" cy="238" rx="10" ry="4" fill="#161616" stroke="#2a2a2a" strokeWidth="0.4"/>
+      <ellipse cx="226" cy="238" rx="10" ry="4" fill="#161616" stroke="#2a2a2a" strokeWidth="0.4"/>
+
+      <text x="195" y="251" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"DM Sans", letterSpacing:2 }}>BACK</text>
     </svg>
   );
 }
@@ -1810,6 +2243,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   });
   const activeGoals = profiles.find(p=>p.isActive)||profiles[0]||DEFAULT_GOALS;
   const [showSettings,setShowSettings]=useState(false);
+  const [showFriends,setShowFriends]=useState(false);
   const [rankNotif,setRankNotif]=useState(null);
   const [prevScore,setPrevScore]=useState(()=>lsGet('im_prevScore',0));
   const [activeSession,setActiveSession]=useState(()=>{
@@ -1917,7 +2351,9 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
     };
     const timer = setTimeout(() => {
       sbUpsertData(session.access_token, userId, payload);
-    }, 2000); // debounce — wait 2s after last change before syncing
+      // Keep public profiles table current so friends can find this user
+      sbUpsertProfile(session.access_token, userId, user?.name||"", parseJwt(session.access_token)?.email||"");
+    }, 2000);
     return () => clearTimeout(timer);
   }, [foodLog, favorites, sessions, bodyMetrics, sleepLog, cardioLog, customWorkouts, profiles]);
 
@@ -1991,12 +2427,52 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const deleteFoodItem = (id) => { setFoodLog(p=>p.filter(f=>f.id!==id)); };
   const editFoodItem = (id, changes) => { setFoodLog(p=>p.map(f=>f.id===id?{...f,...changes}:f)); };
 
+  const [reminderTime,setReminderTime]=useState(()=>lsGet('im_reminderTime','08:00'));
+  const [reminderTime2,setReminderTime2]=useState(()=>lsGet('im_reminderTime2','19:00'));
+
+  // Register service worker and wire up reminders
+  useEffect(()=>{
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  },[]);
+
+  // Send reminder schedule to SW whenever settings change
+  useEffect(()=>{
+    if (!notifEnabled || !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then(reg => {
+      reg.active?.postMessage({
+        type:'SCHEDULE_REMINDERS',
+        reminders:[
+          { time:reminderTime, title:'Izana Mode — Log Breakfast 🍱', body:'Start your day — log your first meal.', tag:'morning' },
+          { time:reminderTime2, title:'Izana Mode — Log Your Workout 🏋️', body:"Don't forget to log today's session.", tag:'evening' },
+        ]
+      });
+    });
+    lsSet('im_reminderTime', reminderTime);
+    lsSet('im_reminderTime2', reminderTime2);
+  },[notifEnabled, reminderTime, reminderTime2]);
+
+  // Ping SW every minute to check scheduled reminders
+  useEffect(()=>{
+    if (!notifEnabled) return;
+    const tick = setInterval(()=>{
+      navigator.serviceWorker.ready.then(reg => reg.active?.postMessage({ type:'TRIGGER_CHECK' }));
+    }, 60000);
+    return ()=>clearInterval(tick);
+  },[notifEnabled]);
+
   const enableNotifications = async () => {
     if (!("Notification" in window)) return alert("Notifications not supported on this device.");
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
       setNotifEnabled(true);
-      new Notification("Izana Mode", { body:"Notifications enabled! We'll remind you to log your meals and workouts.", icon:"/icon-192.png" });
+      // Register SW first
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        reg.showNotification("Izana Mode 🎌", { body:"Notifications active — we'll remind you to log meals and workouts.", icon:"/icons/icon-192.png", tag:"setup" });
+      } else {
+        new Notification("Izana Mode 🎌", { body:"Notifications enabled!", icon:"/icon-192.png" });
+      }
     } else {
       setNotifEnabled(false);
       alert("Notification permission denied. Enable in your browser settings.");
@@ -2253,6 +2729,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
     <div style={S.app}>
       {showAddFood && <AddFoodPanel onAdd={addFoodItem} onClose={()=>setShowAddFood(false)} favorites={favorites} recentFoods={recentFoods}/>}
       {showSettings && <SettingsPanel user={user} session={session} profiles={profiles} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} onSaveProfiles={(p)=>{ setProfiles(p); setShowSettings(false); }} onReset={handleReset} onExport={handleExport} onSignOut={onSignOut} onClose={()=>setShowSettings(false)}/>}
+      {showFriends && <FriendsPanel user={user} session={session} onClose={()=>setShowFriends(false)}/>}
       {rankNotif && <RankUpCelebration rank={rankNotif} onDone={()=>setRankNotif(null)}/>}
       {exerciseDetail && <ExerciseDetailPanel exercise={exerciseDetail} onClose={()=>setExerciseDetail(null)}/>}
 
@@ -2271,6 +2748,9 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:RED, lineHeight:1 }}>{Math.round(totals.calories)}</div>
               <div style={{ fontSize:9, color:"#555", letterSpacing:1, textTransform:"uppercase" }}>kcal today</div>
             </div>
+            <button onClick={()=>setShowFriends(true)} style={{ background:"transparent", border:`1px solid #333`, color:"#555", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0, fontFamily:"'Bebas Neue'", fontSize:16 }}>
+              友
+            </button>
             <button onClick={()=>setShowSettings(true)} style={{ background:"transparent", border:`1px solid #333`, color:"#555", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="#888" strokeWidth="1.8"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="#888" strokeWidth="1.8"/></svg>
             </button>
@@ -3008,11 +3488,11 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             {/* Notifications */}
             <div style={{ ...S.labelRed, marginTop:6 }}>🔔 Reminders</div>
             <div style={{ ...S.card, borderLeft:`3px solid ${notifEnabled?RED:BORDER}` }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: notifEnabled?12:0 }}>
                 <div>
                   <div style={{ fontSize:13, fontWeight:600, marginBottom:2 }}>Push Notifications</div>
                   <div style={{ fontSize:11, color:MUTED, lineHeight:1.5 }}>
-                    {notifEnabled?"Notifications are enabled ✅":"Get reminders to log meals, drink water, and keep your streak."}
+                    {notifEnabled?"Scheduled reminders are active ✅":"Get reminders to log meals and workouts."}
                   </div>
                 </div>
                 {!notifEnabled
@@ -3020,6 +3500,21 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                   : <button style={{ ...S.btnSm, flexShrink:0, marginLeft:10 }} onClick={()=>setNotifEnabled(false)}>Disable</button>
                 }
               </div>
+              {notifEnabled&&(<>
+                <div style={{ display:"flex", gap:10, marginTop:4 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>🌅 MORNING</div>
+                    <input type="time" value={reminderTime} onChange={e=>setReminderTime(e.target.value)}
+                      style={{ background:"#1a1a1a", border:`1px solid #333`, borderBottom:`2px solid ${RED}`, color:WHITE, padding:"8px 10px", fontSize:13, width:"100%", outline:"none", fontFamily:"DM Sans", boxSizing:"border-box" }}/>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>🌙 EVENING</div>
+                    <input type="time" value={reminderTime2} onChange={e=>setReminderTime2(e.target.value)}
+                      style={{ background:"#1a1a1a", border:`1px solid #333`, borderBottom:`2px solid ${RED}`, color:WHITE, padding:"8px 10px", fontSize:13, width:"100%", outline:"none", fontFamily:"DM Sans", boxSizing:"border-box" }}/>
+                  </div>
+                </div>
+                <div style={{ fontSize:10, color:MUTED, marginTop:8 }}>Reminders fire while the app is open or running in the background</div>
+              </>)}
             </div>
           </>)}
 
