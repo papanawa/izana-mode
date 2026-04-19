@@ -1431,6 +1431,11 @@ function Onboarding({ onComplete }) {
 
   if(step===3) return (
     <div style={{ position:"fixed", inset:0, background:WHITE, zIndex:1000, overflow:"hidden" }}>
+      <style>{`
+        .ob-input { color: #111111 !important; background: transparent !important; caret-color: #C41E2A !important; }
+        .ob-input::placeholder { color: #999999 !important; opacity: 1 !important; }
+        .ob-input:focus { border-bottom-color: #C41E2A !important; outline: none !important; }
+      `}</style>
       <div style={{ position:"absolute", top:0, left:0, right:0, height:4, background:`linear-gradient(90deg,${RED},${BLACK})` }}/>
       <div style={{ ...base, justifyContent:"flex-start", paddingTop:60, overflowY:"auto" }}>
         <div style={{ textAlign:"center", marginBottom:28, width:"100%" }}>
