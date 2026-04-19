@@ -2080,8 +2080,6 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
       ...s,
       exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st, done:!st.done }) })
     }));
-    // Start rest timer when marking a set done
-    setRestTimer(r=>r?null:{ seconds:restDuration, max:restDuration });
   };
   const formatTime=(s)=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const finishWorkout=()=>{
@@ -2698,16 +2696,30 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 <span style={{ flex:0.3 }}/>
               </div>
               {ex.sets.map((st,si)=>(
-                <div key={si} style={{ ...S.setRow, alignItems:"center", opacity:st.done?0.55:1, background:st.done?`${RED}08`:"transparent", borderLeft:st.done?`2px solid ${RED}`:"2px solid transparent", paddingLeft:st.done?6:0, marginBottom:4, transition:"all 0.2s" }}>
-                  <span style={{ flex:0.4, fontFamily:"'Bebas Neue'", fontSize:17, color:st.done?RED:MUTED, textAlign:"center" }}>{si+1}</span>
-                  <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.reps} inputMode="numeric" onChange={e=>updateSet(ei,si,"reps",e.target.value)}/>
-                  <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.weight} inputMode="decimal" onChange={e=>updateSet(ei,si,"weight",e.target.value)}/>
-                  <button onClick={()=>toggleSetDone(ei,si)}
-                    style={{ flex:0.4, background:st.done?RED:"transparent", border:`1px solid ${st.done?RED:BORDER}`, color:st.done?WHITE:MUTED, cursor:"pointer", fontSize:13, padding:"6px 0", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    {st.done?"✓":"○"}
-                  </button>
-                  <button onClick={()=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex2,i)=>i!==ei?ex2:{ ...ex2, sets:ex2.sets.filter((_,j)=>j!==si) }) }))}
-                    style={{ flex:0.3, background:"transparent", border:"none", color:MUTED, cursor:"pointer", fontSize:13 }}>✕</button>
+                <div key={si}>
+                  <div style={{ ...S.setRow, alignItems:"center", opacity:st.done?0.55:1, background:st.done?`${RED}08`:"transparent", borderLeft:st.done?`2px solid ${RED}`:"2px solid transparent", paddingLeft:st.done?6:0, marginBottom:2, transition:"all 0.2s" }}>
+                    <span style={{ flex:0.4, fontFamily:"'Bebas Neue'", fontSize:17, color:st.done?RED:MUTED, textAlign:"center" }}>{si+1}</span>
+                    <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.reps} inputMode="numeric" onChange={e=>updateSet(ei,si,"reps",e.target.value)}/>
+                    <input style={{ ...S.input, flex:1, textAlign:"center", padding:"7px 4px" }} placeholder="—" value={st.weight} inputMode="decimal" onChange={e=>updateSet(ei,si,"weight",e.target.value)}/>
+                    <button onClick={()=>toggleSetDone(ei,si)}
+                      style={{ flex:0.4, background:st.done?RED:"transparent", border:`1px solid ${st.done?RED:BORDER}`, color:st.done?WHITE:MUTED, cursor:"pointer", fontSize:13, padding:"6px 0", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      {st.done?"✓":"○"}
+                    </button>
+                    <button onClick={()=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex2,i)=>i!==ei?ex2:{ ...ex2, sets:ex2.sets.filter((_,j)=>j!==si) }) }))}
+                      style={{ flex:0.3, background:"transparent", border:"none", color:MUTED, cursor:"pointer", fontSize:13 }}>✕</button>
+                  </div>
+                  {/* Rest timer trigger — shows after set is done */}
+                  {st.done && !restTimer && (
+                    <button onClick={()=>setRestTimer({ seconds:restDuration, max:restDuration })}
+                      style={{ width:"100%", background:"#111", border:`1px solid #333`, borderTop:"none", color:RED, fontFamily:"'Bebas Neue'", fontSize:12, letterSpacing:2, padding:"6px 0", cursor:"pointer", marginBottom:4, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+                      ⏱ 休 START REST · {restDuration}s
+                    </button>
+                  )}
+                  {st.done && restTimer && (
+                    <div style={{ width:"100%", background:RED+"22", border:`1px solid ${RED}`, borderTop:"none", color:RED, fontFamily:"'Bebas Neue'", fontSize:12, letterSpacing:2, padding:"6px 0", marginBottom:4, textAlign:"center" }}>
+                      ⏱ REST · {formatTime(restTimer.seconds)}
+                    </div>
+                  )}
                 </div>
               ))}
               <button style={{ ...S.btnSm, width:"100%", marginTop:6, borderStyle:"dashed" }} onClick={()=>addSet(ei)}>+ Set</button>
