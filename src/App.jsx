@@ -1555,6 +1555,36 @@ function RankUpCelebration({ rank, onDone }) {
   );
 }
 
+/* ── VOLUME PANEL ────────────────────────────────── */
+function VolumePanelSection({ sessions, volumeExercise, setVolumeExercise }) {
+  if (sessions.length < 2) return null;
+  const allExercises = [...new Set(
+    sessions.flatMap(s => (s.exercises||[]).map(e => typeof e==="string" ? e : e.name).filter(Boolean))
+  )];
+  if (!allExercises.length) return null;
+  return (
+    <div style={{ background:CARD, border:`1px solid ${BORDER}`, padding:"14px", marginBottom:10 }}>
+      <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:6 }}>VOLUME PROGRESSION</div>
+      <div style={{ fontSize:11, color:MUTED, marginBottom:10 }}>Select an exercise to chart volume over time</div>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
+        {allExercises.slice(0,8).map(ex=>(
+          <button key={ex} onClick={()=>setVolumeExercise(volumeExercise===ex?null:ex)}
+            style={{ padding:"5px 10px", fontFamily:"'DM Sans'", fontSize:11, background:volumeExercise===ex?RED:CARD2, color:volumeExercise===ex?WHITE:TEXT, border:`1px solid ${volumeExercise===ex?RED:BORDER}`, cursor:"pointer" }}>
+            {ex}
+          </button>
+        ))}
+      </div>
+      {volumeExercise
+        ? <><div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:1, marginBottom:8 }}>{volumeExercise} — Volume Trend</div>
+            <VolumeChart sessions={sessions} exercise={volumeExercise}/>
+            <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:4 }}>Volume = sets × reps × weight (lbs)</div>
+          </>
+        : <div style={{ textAlign:"center", padding:"12px 0", color:MUTED, fontSize:12 }}>Select an exercise above</div>
+      }
+    </div>
+  );
+}
+
 /* ── MAIN APP ────────────────────────────────────── */
 const DEFAULT_GOALS = { calories:2000, protein:150, carbs:200, fat:65 };
 const SAMPLE_WORKOUTS = [
@@ -2645,7 +2675,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                       <div key={ei} style={{ marginBottom:10 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
                           <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:1, cursor:"pointer" }}
-                            onClick={()=>setVolumeExercise(volumeExercise===ex.name?null:ex.name)}>{ex.name}</div>
+                            onClick={()=>setVolumeExercise(volumeExercise===ex.name?null:ex.name)}>{ex.name||ex}</div>
                           {personalRecords[ex.name]&&ex.sets?.some(st=>parseFloat(st.weight)===personalRecords[ex.name])&&
                             <span style={{ background:RED, color:WHITE, fontSize:9, padding:"1px 5px", fontFamily:"'Bebas Neue'", letterSpacing:1 }}>PR {personalRecords[ex.name]}lbs</span>}
                           <span style={{ fontSize:10, color:MUTED, cursor:"pointer" }} onClick={()=>setVolumeExercise(volumeExercise===ex.name?null:ex.name)}>📈</span>
@@ -2665,32 +2695,8 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             ))}
           </div>}
 
-          {/* Volume chart */}
-          {sessions.length>=2 && (() => {
-            const allExercises = [...new Set(sessions.flatMap(s=>s.exercises?.map(e=>e.name)||[]))];
-            if(!allExercises.length) return null;
-            return (
-              <div style={S.card}>
-                <div style={S.label}>Volume Progression</div>
-                <div style={{ fontSize:11, color:MUTED, marginBottom:10 }}>Select an exercise to chart volume (sets × reps × weight) over time</div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
-                  {allExercises.slice(0,8).map(ex=>(
-                    <button key={ex} onClick={()=>setVolumeExercise(volumeExercise===ex?null:ex)}
-                      style={{ padding:"5px 10px", fontFamily:"'DM Sans'", fontSize:11, background:volumeExercise===ex?RED:CARD2, color:volumeExercise===ex?WHITE:TEXT, border:`1px solid ${volumeExercise===ex?RED:BORDER}`, cursor:"pointer" }}>
-                      {ex}
-                    </button>
-                  ))}
-                </div>
-                {volumeExercise
-                  ? <><div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:1, marginBottom:8 }}>{volumeExercise} — Volume Trend</div>
-                      <VolumeChart sessions={sessions} exercise={volumeExercise}/>
-                      <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:4 }}>Volume = sets × reps × weight (lbs)</div>
-                    </>
-                  : <div style={{ textAlign:"center", padding:"16px 0", color:MUTED, fontSize:12 }}>Select an exercise above to see your progression</div>
-                }
-              </div>
-            );
-          })()}
+          {/* Volume chart — extracted to avoid IIFE issues */}
+          <VolumePanelSection sessions={sessions} volumeExercise={volumeExercise} setVolumeExercise={setVolumeExercise}/>
           <div style={S.labelRed}>Quick Start</div>
           <div style={{ fontSize:12, color:MUTED, marginBottom:10 }}>Pick a template or build your own from scratch.</div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
