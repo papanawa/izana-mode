@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import Model from "react-body-highlighter";
 import {
   sbSignUp, sbSignIn, sbSignInGoogle, sbSignOut,
   sbGetSessionFromHash, sbRefreshToken,
@@ -1898,268 +1899,50 @@ const EXERCISE_INFO = {
 };
 
 /* ── MUSCLE BODY DIAGRAM ─────────────────────────── */
-function MuscleBodyDiagram({ primary=[], secondary=[] }) {
-  const hit = (m) => {
-    const arr = Array.isArray(m) ? m : [m];
-    if (arr.some(x => primary.includes(x))) return RED;
-    if (arr.some(x => secondary.includes(x))) return "#E8836B";
-    return null;
-  };
-  const base = "#1e2020";
-  const baseDark = "#141616";
-  const baseLight = "#2a2e2e";
-  const skin = "#2e3333";
+// Maps our internal muscle names to react-body-highlighter slugs
+const MUSCLE_SLUG_MAP = {
+  chest:        "chest",       upper_chest:  "chest",       lower_chest:  "chest",
+  biceps:       "biceps",      triceps:      "triceps",     forearms:     "forearm",
+  front_delt:   "front-deltoids", side_delt: "front-deltoids", shoulders: "front-deltoids",
+  rear_delt:    "back-deltoids",
+  traps:        "trapezius",   lats:         "upper-back",  mid_back:     "upper-back",
+  lower_back:   "lower-back",
+  core:         "abs",         obliques:     "obliques",
+  quads:        "quadriceps",  hamstrings:   "hamstring",   glutes:       "gluteal",
+  calves:       "calves",      hip_flexors:  "adductor",    adductors:    "adductor",
+};
 
-  const M = (muscles, defaultFill, defaultStroke="#0008") => {
-    const h = hit(muscles);
-    return { fill: h || defaultFill, stroke: h ? (h===RED?"#a01020":"#b05030") : defaultStroke };
+function MuscleBodyDiagram({ primary=[], secondary=[] }) {
+  const toSlugs = (muscles) => [...new Set(
+    muscles.map(m => MUSCLE_SLUG_MAP[m]).filter(Boolean)
+  )];
+
+  const primarySlugs   = toSlugs(primary);
+  const secondarySlugs = toSlugs(secondary).filter(s => !primarySlugs.includes(s));
+
+  const data = [
+    ...(secondarySlugs.length ? [{ name:"secondary", muscles:secondarySlugs, frequency:1 }] : []),
+    ...(primarySlugs.length   ? [{ name:"primary",   muscles:primarySlugs,   frequency:2 }] : []),
+  ];
+
+  const modelProps = {
+    data,
+    bodyColor: "#2a2a2a",
+    highlightedColors: ["#E8836B", RED],
+    style: { flex:1 },
   };
 
   return (
-    <svg viewBox="0 0 260 380" width="100%" style={{ maxHeight:380, display:"block", margin:"0 auto" }}>
-      <defs>
-        <radialGradient id="bodyGrad" cx="50%" cy="35%" r="60%">
-          <stop offset="0%" stopColor="#3a4040"/>
-          <stop offset="100%" stopColor="#111414"/>
-        </radialGradient>
-        <radialGradient id="muscleHighlight" cx="30%" cy="25%" r="65%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.15"/>
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
-        </radialGradient>
-        <filter id="msoft">
-          <feGaussianBlur stdDeviation="0.8"/>
-        </filter>
-      </defs>
-
-      {/* ═══════ FRONT FIGURE ═══════ */}
-      {/* Body silhouette */}
-      <path d="M55,46 Q44,50 38,60 Q32,72 34,84 Q36,96 42,104 Q38,110 37,120 Q36,132 40,144
-               Q40,156 44,170 Q44,178 46,188 Q44,196 44,210 Q44,224 46,234
-               L50,236 L52,224 Q52,210 54,198 Q56,188 58,180
-               Q62,190 64,200 Q66,212 66,226 L68,236 L72,234
-               Q74,224 74,210 Q74,196 72,186 Q74,176 76,166 Q80,152 80,140
-               Q84,128 84,116 Q84,106 80,96 Q86,88 86,76 Q86,64 80,54 Q72,44 65,42 Q60,41 55,46Z"
-        fill="url(#bodyGrad)" stroke="#333" strokeWidth="0.5"/>
-
-      {/* === CHEST === */}
-      {/* Left pec */}
-      <path d="M52,52 Q44,56 40,64 Q38,72 40,80 Q44,86 50,88 Q56,88 60,84 Q64,78 62,68 Q60,58 52,52Z"
-        {...M(["chest","upper_chest"],"#252a2a")} strokeWidth="0.6"/>
-      <path d="M52,52 Q44,56 40,64 Q38,72 40,80 Q44,86 50,88 Q56,88 60,84 Q64,78 62,68 Q60,58 52,52Z"
-        fill="url(#muscleHighlight)"/>
-      {/* Right pec */}
-      <path d="M68,52 Q76,56 80,64 Q82,72 80,80 Q76,86 70,88 Q64,88 60,84 Q56,78 58,68 Q60,58 68,52Z"
-        {...M(["chest","upper_chest"],"#252a2a")} strokeWidth="0.6"/>
-      <path d="M68,52 Q76,56 80,64 Q82,72 80,80 Q76,86 70,88 Q64,88 60,84 Q56,78 58,68 Q60,58 68,52Z"
-        fill="url(#muscleHighlight)"/>
-      {/* Pec crease line */}
-      <line x1="60" y1="54" x2="60" y2="88" stroke={hit(["chest","upper_chest"])?"#8B0010":"#111"} strokeWidth="1.5"/>
-
-      {/* === SHOULDERS === */}
-      {/* Left delt */}
-      <path d="M38,52 Q28,54 24,64 Q20,74 24,82 Q28,88 36,88 Q42,86 44,78 Q46,68 42,58Z"
-        {...M(["front_delt","side_delt","shoulders"],"#222828")} strokeWidth="0.6"/>
-      <path d="M38,52 Q28,54 24,64 Q20,74 24,82 Q28,88 36,88 Q42,86 44,78 Q46,68 42,58Z"
-        fill="url(#muscleHighlight)"/>
-      {/* Right delt */}
-      <path d="M82,52 Q92,54 96,64 Q100,74 96,82 Q92,88 84,88 Q78,86 76,78 Q74,68 78,58Z"
-        {...M(["front_delt","side_delt","shoulders"],"#222828")} strokeWidth="0.6"/>
-      <path d="M82,52 Q92,54 96,64 Q100,74 96,82 Q92,88 84,88 Q78,86 76,78 Q74,68 78,58Z"
-        fill="url(#muscleHighlight)"/>
-
-      {/* === BICEPS === */}
-      {/* Left */}
-      <path d="M22,86 Q16,92 15,102 Q14,112 18,118 Q22,122 28,120 Q33,116 34,106 Q34,96 30,88Z"
-        {...M("biceps","#1e2424")} strokeWidth="0.5"/>
-      {/* Right */}
-      <path d="M98,86 Q104,92 105,102 Q106,112 102,118 Q98,122 92,120 Q87,116 86,106 Q86,96 90,88Z"
-        {...M("biceps","#1e2424")} strokeWidth="0.5"/>
-
-      {/* === FOREARMS === */}
-      {/* Left */}
-      <path d="M15,120 Q11,128 11,138 Q11,146 14,150 Q18,153 22,150 Q26,144 26,134 Q26,124 22,120Z"
-        {...M("forearms","#1a2020")} strokeWidth="0.5"/>
-      {/* Right */}
-      <path d="M105,120 Q109,128 109,138 Q109,146 106,150 Q102,153 98,150 Q94,144 94,134 Q94,124 98,120Z"
-        {...M("forearms","#1a2020")} strokeWidth="0.5"/>
-
-      {/* === ABS === */}
-      {[0,1,2].map(row => (
-        <g key={row}>
-          <rect x="49" y={90+row*12} width="9" height="10" rx="3"
-            fill={hit("core")||"#1e2424"} stroke={hit("core")?"#8B0010":"#111"} strokeWidth="0.5" opacity={1-row*0.06}/>
-          <rect x="62" y={90+row*12} width="9" height="10" rx="3"
-            fill={hit("core")||"#1e2424"} stroke={hit("core")?"#8B0010":"#111"} strokeWidth="0.5" opacity={1-row*0.06}/>
-          {hit("core") && <>
-            <rect x="49" y={90+row*12} width="9" height="10" rx="3" fill="url(#muscleHighlight)"/>
-            <rect x="62" y={90+row*12} width="9" height="10" rx="3" fill="url(#muscleHighlight)"/>
-          </>}
-        </g>
-      ))}
-      {/* Obliques */}
-      <path d="M44,90 Q40,100 40,112 Q41,118 44,120 Q46,114 46,102Z"
-        {...M("core","#1a1e1e")} strokeWidth="0.4" opacity="0.7"/>
-      <path d="M76,90 Q80,100 80,112 Q79,118 76,120 Q74,114 74,102Z"
-        {...M("core","#1a1e1e")} strokeWidth="0.4" opacity="0.7"/>
-
-      {/* === QUADS === */}
-      {/* Left outer */}
-      <path d="M40,144 Q34,154 33,168 Q32,182 36,192 Q40,198 46,196 Q52,192 54,180 Q56,166 54,152 Q52,142 46,140Z"
-        {...M("quads","#1e2828")} strokeWidth="0.6"/>
-      <path d="M40,144 Q34,154 33,168 Q32,182 36,192 Q40,198 46,196 Q52,192 54,180 Q56,166 54,152 Q52,142 46,140Z"
-        fill="url(#muscleHighlight)"/>
-      {/* Left inner */}
-      <path d="M54,144 Q58,152 58,168 Q58,182 54,192 Q50,198 46,196 Q52,192 54,180 Q56,166 54,152Z"
-        {...M("quads","#1a2424")} strokeWidth="0.4" opacity="0.8"/>
-      {/* Right outer */}
-      <path d="M80,144 Q86,154 87,168 Q88,182 84,192 Q80,198 74,196 Q68,192 66,180 Q64,166 66,152 Q68,142 74,140Z"
-        {...M("quads","#1e2828")} strokeWidth="0.6"/>
-      <path d="M80,144 Q86,154 87,168 Q88,182 84,192 Q80,198 74,196 Q68,192 66,180 Q64,166 66,152 Q68,142 74,140Z"
-        fill="url(#muscleHighlight)"/>
-      {/* Right inner */}
-      <path d="M66,144 Q62,152 62,168 Q62,182 66,192 Q70,198 74,196 Q68,192 66,180 Q64,166 66,152Z"
-        {...M("quads","#1a2424")} strokeWidth="0.4" opacity="0.8"/>
-
-      {/* Knee caps */}
-      <ellipse cx="45" cy="198" rx="9" ry="7" fill="#181e1e" stroke="#2a3030" strokeWidth="0.5"/>
-      <ellipse cx="75" cy="198" rx="9" ry="7" fill="#181e1e" stroke="#2a3030" strokeWidth="0.5"/>
-
-      {/* === CALVES front === */}
-      <path d="M36,204 Q31,214 32,228 Q33,238 38,242 Q43,244 47,240 Q51,232 50,218 Q48,206 42,202Z"
-        {...M("calves","#1e2424")} strokeWidth="0.5"/>
-      <path d="M36,204 Q31,214 32,228 Q33,238 38,242 Q43,244 47,240 Q51,232 50,218 Q48,206 42,202Z"
-        fill="url(#muscleHighlight)"/>
-      <path d="M78,204 Q83,214 82,228 Q81,238 76,242 Q71,244 67,240 Q63,232 64,218 Q66,206 72,202Z"
-        {...M("calves","#1e2424")} strokeWidth="0.5"/>
-      <path d="M78,204 Q83,214 82,228 Q81,238 76,242 Q71,244 67,240 Q63,232 64,218 Q66,206 72,202Z"
-        fill="url(#muscleHighlight)"/>
-
-      {/* HEAD front */}
-      <ellipse cx="60" cy="28" rx="13" ry="15" fill={skin} stroke="#333" strokeWidth="0.5"/>
-
-      {/* NECK front */}
-      <path d="M54,40 Q60,46 66,40 L67,52 Q60,56 53,52Z" fill={skin} stroke="#2a2a2a" strokeWidth="0.4"/>
-
-      <text x="60" y="260" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"DM Sans", letterSpacing:2 }}>FRONT</text>
-
-      {/* ═══════ BACK FIGURE ═══════ */}
-      {/* Body silhouette */}
-      <path d="M185,46 Q174,50 168,60 Q162,72 164,84 Q166,96 172,104 Q168,110 167,120 Q166,132 170,144
-               Q170,156 174,170 Q174,178 176,188 Q174,196 174,210 Q174,224 176,234
-               L180,236 L182,224 Q182,210 184,198 Q186,188 188,180
-               Q192,190 194,200 Q196,212 196,226 L198,236 L202,234
-               Q204,224 204,210 Q204,196 202,186 Q204,176 206,166 Q210,152 210,140
-               Q214,128 214,116 Q214,106 210,96 Q216,88 216,76 Q216,64 210,54 Q202,44 195,42 Q190,41 185,46Z"
-        fill="url(#bodyGrad)" stroke="#333" strokeWidth="0.5"/>
-
-      {/* === TRAPS === */}
-      <path d="M175,46 Q190,40 205,46 Q212,52 210,60 Q202,56 190,55 Q178,56 170,60 Q168,52 175,46Z"
-        {...M("traps","#222828")} strokeWidth="0.6"/>
-      <path d="M175,46 Q190,40 205,46 Q212,52 210,60 Q202,56 190,55 Q178,56 170,60 Q168,52 175,46Z"
-        fill="url(#muscleHighlight)"/>
-      {/* Trap center ridge */}
-      <line x1="190" y1="42" x2="190" y2="60" stroke={hit("traps")?"#8B0010":"#111"} strokeWidth="1.2"/>
-
-      {/* === REAR DELTS === */}
-      <path d="M163,52 Q153,56 150,66 Q148,76 153,82 Q158,86 164,84 Q169,80 170,70 Q171,60 167,54Z"
-        {...M(["rear_delt","shoulders"],"#1e2424")} strokeWidth="0.6"/>
-      <path d="M163,52 Q153,56 150,66 Q148,76 153,82 Q158,86 164,84 Q169,80 170,70 Q171,60 167,54Z"
-        fill="url(#muscleHighlight)"/>
-      <path d="M217,52 Q227,56 230,66 Q232,76 227,82 Q222,86 216,84 Q211,80 210,70 Q209,60 213,54Z"
-        {...M(["rear_delt","shoulders"],"#1e2424")} strokeWidth="0.6"/>
-      <path d="M217,52 Q227,56 230,66 Q232,76 227,82 Q222,86 216,84 Q211,80 210,70 Q209,60 213,54Z"
-        fill="url(#muscleHighlight)"/>
-
-      {/* === TRICEPS === */}
-      <path d="M148,82 Q142,90 142,102 Q142,112 146,116 Q150,119 155,116 Q159,109 158,98 Q157,88 152,82Z"
-        {...M("triceps","#1a2020")} strokeWidth="0.5"/>
-      <path d="M232,82 Q238,90 238,102 Q238,112 234,116 Q230,119 225,116 Q221,109 222,98 Q223,88 228,82Z"
-        {...M("triceps","#1a2020")} strokeWidth="0.5"/>
-
-      {/* === FOREARMS back === */}
-      <path d="M142,118 Q138,126 138,136 Q138,144 142,148 Q146,150 150,147 Q154,140 153,130 Q152,120 148,117Z"
-        {...M("forearms","#181e1e")} strokeWidth="0.5"/>
-      <path d="M238,118 Q242,126 242,136 Q242,144 238,148 Q234,150 230,147 Q226,140 227,130 Q228,120 232,117Z"
-        {...M("forearms","#181e1e")} strokeWidth="0.5"/>
-
-      {/* === LATS === */}
-      {/* Left lat - wing shape */}
-      <path d="M168,58 Q160,70 157,88 Q154,104 158,116 Q163,122 170,118 Q176,108 176,90 Q176,72 172,58Z"
-        {...M("lats","#232929")} strokeWidth="0.6"/>
-      <path d="M168,58 Q160,70 157,88 Q154,104 158,116 Q163,122 170,118 Q176,108 176,90 Q176,72 172,58Z"
-        fill="url(#muscleHighlight)"/>
-      {/* Right lat */}
-      <path d="M212,58 Q220,70 223,88 Q226,104 222,116 Q217,122 210,118 Q204,108 204,90 Q204,72 208,58Z"
-        {...M("lats","#232929")} strokeWidth="0.6"/>
-      <path d="M212,58 Q220,70 223,88 Q226,104 222,116 Q217,122 210,118 Q204,108 204,90 Q204,72 208,58Z"
-        fill="url(#muscleHighlight)"/>
-
-      {/* === MID BACK / RHOMBOIDS === */}
-      <path d="M174,58 Q190,54 206,58 Q208,70 206,80 Q190,84 174,80 Q172,70 174,58Z"
-        {...M(["mid_back","lats"],"#1e2424")} strokeWidth="0.6"/>
-
-      {/* === LOWER BACK / ERECTORS === */}
-      {/* Left erector */}
-      <path d="M182,88 Q178,98 178,112 Q178,120 182,124 Q186,126 189,122 Q191,114 191,100 Q190,90 186,86Z"
-        {...M("lower_back","#1c2222")} strokeWidth="0.5"/>
-      {/* Right erector */}
-      <path d="M198,88 Q202,98 202,112 Q202,120 198,124 Q194,126 191,122 Q189,114 189,100 Q190,90 194,86Z"
-        {...M("lower_back","#1c2222")} strokeWidth="0.5"/>
-
-      {/* === GLUTES === */}
-      {/* Left */}
-      <path d="M172,120 Q164,128 162,142 Q161,156 168,162 Q175,166 182,162 Q188,154 187,140 Q186,126 178,118Z"
-        {...M("glutes","#222828")} strokeWidth="0.7"/>
-      <path d="M172,120 Q164,128 162,142 Q161,156 168,162 Q175,166 182,162 Q188,154 187,140 Q186,126 178,118Z"
-        fill="url(#muscleHighlight)"/>
-      {/* Right */}
-      <path d="M208,120 Q216,128 218,142 Q219,156 212,162 Q205,166 198,162 Q192,154 193,140 Q194,126 202,118Z"
-        {...M("glutes","#222828")} strokeWidth="0.7"/>
-      <path d="M208,120 Q216,128 218,142 Q219,156 212,162 Q205,166 198,162 Q192,154 193,140 Q194,126 202,118Z"
-        fill="url(#muscleHighlight)"/>
-
-      {/* === HAMSTRINGS === */}
-      {/* Left */}
-      <path d="M163,162 Q157,172 156,186 Q155,198 159,206 Q163,210 169,208 Q174,202 175,188 Q175,174 171,162Z"
-        {...M("hamstrings","#1e2828")} strokeWidth="0.6"/>
-      <path d="M163,162 Q157,172 156,186 Q155,198 159,206 Q163,210 169,208 Q174,202 175,188 Q175,174 171,162Z"
-        fill="url(#muscleHighlight)"/>
-      <path d="M171,162 Q176,172 176,186 Q176,200 172,208 Q168,210 163,206 Q160,200 161,186 Q162,172 166,162Z"
-        {...M("hamstrings","#1a2424")} strokeWidth="0.4" opacity="0.85"/>
-      {/* Right */}
-      <path d="M217,162 Q223,172 224,186 Q225,198 221,206 Q217,210 211,208 Q206,202 205,188 Q205,174 209,162Z"
-        {...M("hamstrings","#1e2828")} strokeWidth="0.6"/>
-      <path d="M217,162 Q223,172 224,186 Q225,198 221,206 Q217,210 211,208 Q206,202 205,188 Q205,174 209,162Z"
-        fill="url(#muscleHighlight)"/>
-      <path d="M209,162 Q204,172 204,186 Q204,200 208,208 Q212,210 217,206 Q220,200 219,186 Q218,172 214,162Z"
-        {...M("hamstrings","#1a2424")} strokeWidth="0.4" opacity="0.85"/>
-
-      {/* Knee caps back */}
-      <ellipse cx="168" cy="210" rx="9" ry="7" fill="#181e1e" stroke="#2a3030" strokeWidth="0.5"/>
-      <ellipse cx="212" cy="210" rx="9" ry="7" fill="#181e1e" stroke="#2a3030" strokeWidth="0.5"/>
-
-      {/* === CALVES back === */}
-      {/* Left gastrocnemius - two heads */}
-      <path d="M160,216 Q155,228 156,242 Q157,250 162,253 Q167,254 171,250 Q174,242 173,228 Q171,216 165,213Z"
-        {...M("calves","#1e2424")} strokeWidth="0.6"/>
-      <path d="M160,216 Q155,228 156,242 Q157,250 162,253 Q167,254 171,250 Q174,242 173,228 Q171,216 165,213Z"
-        fill="url(#muscleHighlight)"/>
-      <path d="M165,213 Q170,224 170,238 Q169,248 165,252 Q161,251 159,246 Q157,238 158,226Z"
-        {...M("calves","#1a2020")} strokeWidth="0.4" opacity="0.8"/>
-      {/* Right gastrocnemius */}
-      <path d="M220,216 Q225,228 224,242 Q223,250 218,253 Q213,254 209,250 Q206,242 207,228 Q209,216 215,213Z"
-        {...M("calves","#1e2424")} strokeWidth="0.6"/>
-      <path d="M220,216 Q225,228 224,242 Q223,250 218,253 Q213,254 209,250 Q206,242 207,228 Q209,216 215,213Z"
-        fill="url(#muscleHighlight)"/>
-      <path d="M215,213 Q210,224 210,238 Q211,248 215,252 Q219,251 221,246 Q223,238 222,226Z"
-        {...M("calves","#1a2020")} strokeWidth="0.4" opacity="0.8"/>
-
-      {/* HEAD back */}
-      <ellipse cx="190" cy="28" rx="13" ry="15" fill={skin} stroke="#333" strokeWidth="0.5"/>
-      <path d="M184,40 Q190,46 196,40 L197,52 Q190,56 183,52Z" fill={skin} stroke="#2a2a2a" strokeWidth="0.4"/>
-
-      <text x="190" y="268" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"DM Sans", letterSpacing:2 }}>BACK</text>
-    </svg>
+    <div style={{ display:"flex", gap:8, justifyContent:"center", alignItems:"flex-end" }}>
+      <div style={{ flex:1, textAlign:"center" }}>
+        <Model {...modelProps} type="anterior"/>
+        <div style={{ fontSize:7, color:"#555", fontFamily:"DM Sans", letterSpacing:2, marginTop:4 }}>FRONT</div>
+      </div>
+      <div style={{ flex:1, textAlign:"center" }}>
+        <Model {...modelProps} type="posterior"/>
+        <div style={{ fontSize:7, color:"#555", fontFamily:"DM Sans", letterSpacing:2, marginTop:4 }}>BACK</div>
+      </div>
+    </div>
   );
 }
 
