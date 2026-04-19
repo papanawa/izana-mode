@@ -99,6 +99,9 @@ const ANIM = `
   .spin-slow{animation:spinSlow 12s linear infinite}
   .fade-up{animation:fadeUp 0.7s ease forwards}
   .slide-up{animation:slideUp 0.35s cubic-bezier(.22,1,.36,1) forwards}
+  .ob-input:focus{border-bottom-color:#C41E2A !important; caret-color:#C41E2A; outline:none;}
+  .ob-input::placeholder{color:#aaa;}
+  .ob-input{caret-color:#C41E2A;}
 `;
 
 function YinYang({ size=32, style={}, className="" }) {
@@ -1440,7 +1443,7 @@ function Onboarding({ onComplete }) {
         {/* Name */}
         <div style={{ width:"100%", marginBottom:20 }}>
           <div style={{ fontFamily:"'Bebas Neue'", fontSize:12, color:MUTED, letterSpacing:3, marginBottom:8 }}>YOUR NAME</div>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Enter your name..."
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Enter your name..." className="ob-input"
             style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:"#111111", border:"none", borderBottom:`2px solid ${name?RED:"#aaa"}`, fontFamily:"'Bebas Neue'", fontSize:24, letterSpacing:2, padding:"8px 0", outline:"none", transition:"border-color 0.3s" }}/>
         </div>
 
@@ -1464,30 +1467,30 @@ function Onboarding({ onComplete }) {
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
             <div>
               <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>AGE</div>
-              <input value={stats.age} onChange={e=>setStats(s=>({...s,age:e.target.value}))} placeholder="e.g. 28" type="text" inputMode="numeric" pattern="[0-9]*"
-                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.age?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
+              <input value={stats.age} onChange={e=>setStats(s=>({...s,age:e.target.value}))} placeholder="e.g. 28" className="ob-input" type="text" inputMode="numeric" pattern="[0-9]*"
+                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:"#111", border:"none", borderBottom:`2px solid ${stats.age?RED:"#999"}`, fontFamily:"'DM Sans'", fontSize:16, padding:"8px 0", outline:"none" }}/>
             </div>
             <div>
               <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>WEIGHT (lbs)</div>
-              <input value={stats.weightLbs} onChange={e=>setStats(s=>({...s,weightLbs:e.target.value}))} placeholder="e.g. 185" type="text" inputMode="decimal" pattern="[0-9]*"
-                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.weightLbs?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
+              <input value={stats.weightLbs} onChange={e=>setStats(s=>({...s,weightLbs:e.target.value}))} placeholder="e.g. 185" className="ob-input" type="text" inputMode="decimal" pattern="[0-9]*"
+                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:"#111", border:"none", borderBottom:`2px solid ${stats.weightLbs?RED:"#999"}`, fontFamily:"'DM Sans'", fontSize:16, padding:"8px 0", outline:"none" }}/>
             </div>
             <div>
               <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>HEIGHT (ft)</div>
-              <input value={stats.heightFt} onChange={e=>setStats(s=>({...s,heightFt:e.target.value}))} placeholder="e.g. 5" type="text" inputMode="numeric" pattern="[0-9]*"
-                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.heightFt?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
+              <input value={stats.heightFt} onChange={e=>setStats(s=>({...s,heightFt:e.target.value}))} placeholder="e.g. 5" className="ob-input" type="text" inputMode="numeric" pattern="[0-9]*"
+                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:"#111", border:"none", borderBottom:`2px solid ${stats.heightFt?RED:"#999"}`, fontFamily:"'DM Sans'", fontSize:16, padding:"8px 0", outline:"none" }}/>
             </div>
             <div>
               <div style={{ fontSize:10, color:MUTED, letterSpacing:1, marginBottom:4 }}>HEIGHT (in)</div>
-              <input value={stats.heightIn} onChange={e=>setStats(s=>({...s,heightIn:e.target.value}))} placeholder="e.g. 10" type="text" inputMode="numeric" pattern="[0-9]*"
-                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${stats.heightIn?RED:BORDER}`, fontFamily:"'DM Sans'", fontSize:16, padding:"6px 0", outline:"none" }}/>
+              <input value={stats.heightIn} onChange={e=>setStats(s=>({...s,heightIn:e.target.value}))} placeholder="e.g. 10" className="ob-input" type="text" inputMode="numeric" pattern="[0-9]*"
+                style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:"#111", border:"none", borderBottom:`2px solid ${stats.heightIn?RED:"#999"}`, fontFamily:"'DM Sans'", fontSize:16, padding:"8px 0", outline:"none" }}/>
             </div>
           </div>
           {/* Sex */}
           <div style={{ display:"flex", gap:8, marginBottom:10 }}>
             {["male","female"].map(s=>(
               <button key={s} onClick={()=>setStats(st=>({...st,sex:s}))}
-                style={{ flex:1, padding:"8px", background:stats.sex===s?BLACK:"transparent", color:stats.sex===s?WHITE:TEXT, border:`1px solid ${stats.sex===s?BLACK:BORDER}`, fontFamily:"'Bebas Neue'", fontSize:13, letterSpacing:1, cursor:"pointer" }}>
+                style={{ flex:1, padding:"10px 8px", background:stats.sex===s?BLACK:"transparent", color:stats.sex===s?WHITE:"#111", border:`1.5px solid ${stats.sex===s?BLACK:"#999"}`, fontFamily:"'Bebas Neue'", fontSize:13, letterSpacing:1, cursor:"pointer" }}>
                 {s.toUpperCase()}
               </button>
             ))}
