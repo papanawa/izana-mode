@@ -1929,16 +1929,17 @@ function MuscleBodyDiagram({ primary=[], secondary=[] }) {
     data,
     bodyColor: "#2a2a2a",
     highlightedColors: ["#E8836B", RED],
-    style: { flex:1 },
+    style: { flex:1, maxWidth:130 },
+    svgStyle: { width:"100%", height:"auto" },
   };
 
   return (
-    <div style={{ display:"flex", gap:8, justifyContent:"center", alignItems:"flex-end" }}>
-      <div style={{ flex:1, textAlign:"center" }}>
+    <div style={{ display:"flex", gap:8, justifyContent:"center", alignItems:"flex-end", padding:"8px 0" }}>
+      <div style={{ flex:1, textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center" }}>
         <Model {...modelProps} type="anterior"/>
         <div style={{ fontSize:7, color:"#555", fontFamily:"DM Sans", letterSpacing:2, marginTop:4 }}>FRONT</div>
       </div>
-      <div style={{ flex:1, textAlign:"center" }}>
+      <div style={{ flex:1, textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center" }}>
         <Model {...modelProps} type="posterior"/>
         <div style={{ fontSize:7, color:"#555", fontFamily:"DM Sans", letterSpacing:2, marginTop:4 }}>BACK</div>
       </div>
@@ -2532,8 +2533,9 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:RED, lineHeight:1 }}>{Math.round(totals.calories)}</div>
               <div style={{ fontSize:9, color:"#555", letterSpacing:1, textTransform:"uppercase" }}>kcal today</div>
             </div>
-            <button onClick={()=>setShowFriends(true)} style={{ background:"transparent", border:`1px solid #333`, color:"#555", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0, fontFamily:"'Bebas Neue'", fontSize:16 }}>
-              友
+            <button onClick={()=>setShowFriends(true)} style={{ background:"transparent", border:`1px solid #333`, color:"#555", width:38, height:38, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0, gap:1 }}>
+              <span style={{ fontFamily:"'Bebas Neue'", fontSize:14, lineHeight:1, color:"#666" }}>友</span>
+              <span style={{ fontFamily:"'DM Sans'", fontSize:7, letterSpacing:0.5, color:"#555", lineHeight:1 }}>CREW</span>
             </button>
             <button onClick={()=>setShowSettings(true)} style={{ background:"transparent", border:`1px solid #333`, color:"#555", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="#888" strokeWidth="1.8"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="#888" strokeWidth="1.8"/></svg>
