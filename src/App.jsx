@@ -1640,7 +1640,7 @@ function MuscleBodyDiagram({ primary=[], secondary=[] }) {
       <ellipse cx="22" cy="61" rx="5" ry="7" fill={c("side_delt")} stroke={cs("side_delt")} strokeWidth="0.5"/>
       <ellipse cx="98" cy="61" rx="5" ry="7" fill={c("side_delt")} stroke={cs("side_delt")} strokeWidth="0.5"/>
       <path d="M38,44 Q60,38 82,44 Q86,56 78,64 Q60,68 42,64 Q34,56 38,44 Z" fill={c("upper_chest")} stroke={cs("upper_chest")} strokeWidth="0.6"/>
-      <path d="M40,62 Q60,68 80,62 Q80,76 70,80 Q60,83 50,80 Q40,76 40,62 Z" fill={c("chest")||c("lower_chest")||"#2a2a2a"} stroke={cs("chest")||cs("lower_chest")||"#3a3a3a"} strokeWidth="0.6"/>
+      <path d="M40,62 Q60,68 80,62 Q80,76 70,80 Q60,83 50,80 Q40,76 40,62 Z" fill={primary.includes("chest")||primary.includes("lower_chest")?RED:secondary.includes("chest")||secondary.includes("lower_chest")?"#E8836B":"#2a2a2a"} stroke={primary.includes("chest")||primary.includes("lower_chest")?RED:secondary.includes("chest")||secondary.includes("lower_chest")?"#c06040":"#3a3a3a"} strokeWidth="0.6"/>
       <path d="M24,66 Q19,72 19,82 Q19,92 24,95 Q28,96 31,91 Q33,84 32,74 Q31,66 27,64 Z" fill={c("biceps")} stroke={cs("biceps")} strokeWidth="0.5"/>
       <path d="M96,66 Q101,72 101,82 Q101,92 96,95 Q92,96 89,91 Q87,84 88,74 Q89,66 93,64 Z" fill={c("biceps")} stroke={cs("biceps")} strokeWidth="0.5"/>
       <path d="M20,95 Q17,103 17,112 Q18,119 22,120 Q26,120 28,116 Q30,108 29,100 Q28,94 24,93 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
@@ -2667,10 +2667,11 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
           {/* Volume chart */}
           {sessions.length>=2&&(()=>{
             const allExercises = [...new Set(sessions.flatMap(s=>s.exercises?.map(e=>e.name)||[]))];
-            return allExercises.length>0&&(
+            if(!allExercises.length) return null;
+            return (
               <div style={S.card}>
                 <div style={S.label}>Volume Progression</div>
-                <div style={{ fontSize:11, color:MUTED, marginBottom:10 }}>Tap an exercise name in history to chart its volume (sets × reps × weight)</div>
+                <div style={{ fontSize:11, color:MUTED, marginBottom:10 }}>Select an exercise to chart volume (sets × reps × weight) over time</div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
                   {allExercises.slice(0,8).map(ex=>(
                     <button key={ex} onClick={()=>setVolumeExercise(volumeExercise===ex?null:ex)}
