@@ -2186,6 +2186,8 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
       exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st, done:!st.done }) })
     }));
   };
+  const formatTime=(s)=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+
   const playZenBowl = () => {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
