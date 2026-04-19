@@ -202,6 +202,39 @@ function CardioChart({ data }) {
   );
 }
 
+function VolumeChart({ sessions, exercise }) {
+  // Gather volume (sets × reps × weight) per session for a given exercise
+  const data = sessions.map(s => {
+    const ex = s.exercises?.find(e=>e.name===exercise);
+    if (!ex) return null;
+    const vol = ex.sets?.reduce((sum,st)=>{
+      const r = parseFloat(st.reps)||0;
+      const w = parseFloat(st.weight)||0;
+      return sum + (r * w);
+    }, 0) || 0;
+    return { date: s.date||s.start, vol };
+  }).filter(Boolean).filter(d=>d.vol>0).slice(-10);
+
+  if (data.length < 2) return <div style={{ textAlign:"center", padding:"12px 0", color:MUTED, fontSize:12 }}>Log at least 2 sessions with weight to see volume trend</div>;
+
+  const maxV = Math.max(...data.map(d=>d.vol));
+  const W=320, H=80, pad=20;
+  const toX=(i)=>pad+(i/(data.length-1))*(W-pad*2);
+  const toY=(v)=>H-pad-(v/maxV)*(H-pad*2);
+  const pts=data.map((d,i)=>`${toX(i)},${toY(d.vol)}`).join(" ");
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:"visible" }}>
+      <polyline points={pts} fill="none" stroke={RED} strokeWidth="2" strokeLinejoin="round"/>
+      {data.map((d,i)=>(
+        <g key={i}>
+          <circle cx={toX(i)} cy={toY(d.vol)} r="3.5" fill={RED}/>
+          <text x={toX(i)} y={toY(d.vol)-7} textAnchor="middle" style={{ fontSize:8, fontFamily:"'DM Sans'", fill:TEXT }}>{Math.round(d.vol/1000*10)/10}k</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function StarRating({ value, onChange, color=RED }) {
   return (
     <div style={{ display:"flex", gap:6 }}>
@@ -1595,86 +1628,71 @@ const EXERCISE_INFO = {
 
 /* ── MUSCLE BODY DIAGRAM ─────────────────────────── */
 function MuscleBodyDiagram({ primary=[], secondary=[] }) {
-  const hit  = (m) => primary.includes(m)   ? RED    : secondary.includes(m) ? "#E8836B" : "#333";
-  const hitL = (m) => primary.includes(m)   ? RED    : secondary.includes(m) ? "#E8836B" : "#444";
+  const c  = (m) => primary.includes(m) ? RED : secondary.includes(m) ? "#E8836B" : "#2a2a2a";
+  const cs = (m) => primary.includes(m) ? RED : secondary.includes(m) ? "#c06040" : "#3a3a3a";
   return (
-    <svg viewBox="0 0 200 380" width="100%" style={{ maxHeight:280, display:"block", margin:"0 auto" }}>
-      {/* ── FRONT BODY ── */}
-      {/* Head */}
-      <ellipse cx="60" cy="22" rx="14" ry="16" fill="#2a2a2a" stroke="#444" strokeWidth="1"/>
-      {/* Neck */}
-      <rect x="54" y="36" width="12" height="10" fill="#2a2a2a"/>
-      {/* Upper chest */}
-      <ellipse cx="60" cy="58" rx="22" ry="10" fill={hit("upper_chest")} stroke="#555" strokeWidth="0.5"/>
-      {/* Chest */}
-      <ellipse cx="60" cy="70" rx="22" ry="14" fill={hit("chest")} stroke="#555" strokeWidth="0.5"/>
-      {/* Lower chest */}
-      <ellipse cx="60" cy="82" rx="20" ry="8" fill={hit("lower_chest")} stroke="#555" strokeWidth="0.5"/>
-      {/* Front delts */}
-      <ellipse cx="38" cy="56" rx="8" ry="10" fill={hit("front_delt")} stroke="#555" strokeWidth="0.5"/>
-      <ellipse cx="82" cy="56" rx="8" ry="10" fill={hit("front_delt")} stroke="#555" strokeWidth="0.5"/>
-      {/* Side delts */}
-      <ellipse cx="33" cy="60" rx="6" ry="8" fill={hit("side_delt")} stroke="#555" strokeWidth="0.5"/>
-      <ellipse cx="87" cy="60" rx="6" ry="8" fill={hit("side_delt")} stroke="#555" strokeWidth="0.5"/>
-      {/* Biceps */}
-      <rect x="26" y="68" width="10" height="22" rx="5" fill={hit("biceps")} stroke="#555" strokeWidth="0.5"/>
-      <rect x="84" y="68" width="10" height="22" rx="5" fill={hit("biceps")} stroke="#555" strokeWidth="0.5"/>
-      {/* Forearms */}
-      <rect x="24" y="92" width="9" height="20" rx="4" fill={hit("forearms")} stroke="#555" strokeWidth="0.5"/>
-      <rect x="87" y="92" width="9" height="20" rx="4" fill={hit("forearms")} stroke="#555" strokeWidth="0.5"/>
-      {/* Abs / Core */}
-      <rect x="50" y="88" width="20" height="32" rx="4" fill={hit("core")} stroke="#555" strokeWidth="0.5"/>
-      {/* Obliques */}
-      <rect x="42" y="92" width="10" height="24" rx="3" fill={hit("core")} stroke="#555" strokeWidth="0.5" opacity="0.6"/>
-      <rect x="68" y="92" width="10" height="24" rx="3" fill={hit("core")} stroke="#555" strokeWidth="0.5" opacity="0.6"/>
-      {/* Quads */}
-      <rect x="45" y="126" width="14" height="40" rx="6" fill={hit("quads")} stroke="#555" strokeWidth="0.5"/>
-      <rect x="61" y="126" width="14" height="40" rx="6" fill={hit("quads")} stroke="#555" strokeWidth="0.5"/>
-      {/* Knees */}
-      <ellipse cx="52" cy="170" rx="8" ry="6" fill="#2a2a2a" stroke="#444" strokeWidth="0.5"/>
-      <ellipse cx="68" cy="170" rx="8" ry="6" fill="#2a2a2a" stroke="#444" strokeWidth="0.5"/>
-      {/* Calves front */}
-      <rect x="45" y="177" width="13" height="32" rx="6" fill={hit("calves")} stroke="#555" strokeWidth="0.5"/>
-      <rect x="62" y="177" width="13" height="32" rx="6" fill={hit("calves")} stroke="#555" strokeWidth="0.5"/>
-      {/* Hips */}
-      <rect x="42" y="118" width="36" height="14" rx="4" fill={hit("glutes")} stroke="#555" strokeWidth="0.5" opacity="0.5"/>
-      {/* Label */}
-      <text x="60" y="375" textAnchor="middle" style={{ fontSize:8, fill:"#666", fontFamily:"'DM Sans'" }}>FRONT</text>
+    <svg viewBox="0 0 220 242" width="100%" style={{ maxHeight:300, display:"block", margin:"0 auto" }}>
+      {/* FRONT */}
+      <ellipse cx="60" cy="18" rx="12" ry="14" fill="#222" stroke="#444" strokeWidth="0.8"/>
+      <path d="M55,30 Q60,36 65,30 L66,40 Q60,44 54,40 Z" fill="#1e1e1e" stroke="#333" strokeWidth="0.5"/>
+      <path d="M34,47 Q24,50 22,60 Q22,70 30,72 Q36,70 38,62 Q38,52 34,47 Z" fill={c("front_delt")} stroke={cs("front_delt")} strokeWidth="0.6"/>
+      <path d="M86,47 Q96,50 98,60 Q98,70 90,72 Q84,70 82,62 Q82,52 86,47 Z" fill={c("front_delt")} stroke={cs("front_delt")} strokeWidth="0.6"/>
+      <ellipse cx="22" cy="61" rx="5" ry="7" fill={c("side_delt")} stroke={cs("side_delt")} strokeWidth="0.5"/>
+      <ellipse cx="98" cy="61" rx="5" ry="7" fill={c("side_delt")} stroke={cs("side_delt")} strokeWidth="0.5"/>
+      <path d="M38,44 Q60,38 82,44 Q86,56 78,64 Q60,68 42,64 Q34,56 38,44 Z" fill={c("upper_chest")} stroke={cs("upper_chest")} strokeWidth="0.6"/>
+      <path d="M40,62 Q60,68 80,62 Q80,76 70,80 Q60,83 50,80 Q40,76 40,62 Z" fill={c("chest")||c("lower_chest")||"#2a2a2a"} stroke={cs("chest")||cs("lower_chest")||"#3a3a3a"} strokeWidth="0.6"/>
+      <path d="M24,66 Q19,72 19,82 Q19,92 24,95 Q28,96 31,91 Q33,84 32,74 Q31,66 27,64 Z" fill={c("biceps")} stroke={cs("biceps")} strokeWidth="0.5"/>
+      <path d="M96,66 Q101,72 101,82 Q101,92 96,95 Q92,96 89,91 Q87,84 88,74 Q89,66 93,64 Z" fill={c("biceps")} stroke={cs("biceps")} strokeWidth="0.5"/>
+      <path d="M20,95 Q17,103 17,112 Q18,119 22,120 Q26,120 28,116 Q30,108 29,100 Q28,94 24,93 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
+      <path d="M100,95 Q103,103 103,112 Q102,119 98,120 Q94,120 92,116 Q90,108 91,100 Q92,94 96,93 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
+      <path d="M48,80 Q60,77 72,80 L72,90 Q60,93 48,90 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.5"/>
+      <path d="M48,92 Q60,89 72,92 L72,102 Q60,105 48,102 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.5" opacity="0.9"/>
+      <path d="M48,104 Q60,101 72,104 L72,114 Q60,117 48,114 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.5" opacity="0.8"/>
+      <line x1="60" y1="80" x2="60" y2="116" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <path d="M40,86 Q44,96 43,110 Q40,116 39,118 Q36,110 37,98 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.4" opacity="0.6"/>
+      <path d="M80,86 Q76,96 77,110 Q80,116 81,118 Q84,110 83,98 Z" fill={c("core")} stroke={cs("core")} strokeWidth="0.4" opacity="0.6"/>
+      <path d="M42,116 Q60,120 78,116 Q80,126 76,130 Q60,134 44,130 Q40,126 42,116 Z" fill="#222" stroke="#333" strokeWidth="0.5"/>
+      <path d="M44,130 Q38,136 37,152 Q36,165 40,170 Q46,175 51,169 Q54,160 53,146 Q52,134 46,130 Z" fill={c("quads")} stroke={cs("quads")} strokeWidth="0.6"/>
+      <path d="M50,130 Q55,134 56,150 Q56,163 52,170 Q47,175 44,170 Q40,163 41,150 Q42,136 46,130 Z" fill={c("quads")} stroke={cs("quads")} strokeWidth="0.6" opacity="0.85"/>
+      <path d="M76,130 Q82,136 83,152 Q84,165 80,170 Q74,175 69,169 Q66,160 67,146 Q68,134 74,130 Z" fill={c("quads")} stroke={cs("quads")} strokeWidth="0.6"/>
+      <path d="M70,130 Q65,134 64,150 Q64,163 68,170 Q73,175 76,170 Q80,163 79,150 Q78,136 74,130 Z" fill={c("quads")} stroke={cs("quads")} strokeWidth="0.6" opacity="0.85"/>
+      <ellipse cx="47" cy="172" rx="8" ry="6" fill="#1e1e1e" stroke="#3a3a3a" strokeWidth="0.5"/>
+      <ellipse cx="73" cy="172" rx="8" ry="6" fill="#1e1e1e" stroke="#3a3a3a" strokeWidth="0.5"/>
+      <path d="M40,178 Q36,188 37,202 Q38,212 43,215 Q47,216 50,212 Q52,203 51,190 Q49,180 44,177 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.5"/>
+      <path d="M70,178 Q74,188 73,202 Q72,212 67,215 Q63,216 60,212 Q58,203 59,190 Q61,180 66,177 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.5"/>
+      <ellipse cx="44" cy="217" rx="8" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
+      <ellipse cx="67" cy="217" rx="8" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
+      <text x="57" y="233" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"'DM Sans'", letterSpacing:2 }}>FRONT</text>
 
-      {/* ── BACK BODY ── */}
-      {/* Head */}
-      <ellipse cx="150" cy="22" rx="14" ry="16" fill="#2a2a2a" stroke="#444" strokeWidth="1"/>
-      {/* Neck */}
-      <rect x="144" y="36" width="12" height="10" fill="#2a2a2a"/>
-      {/* Traps */}
-      <ellipse cx="150" cy="50" rx="22" ry="10" fill={hit("traps")} stroke="#555" strokeWidth="0.5"/>
-      {/* Rear delts */}
-      <ellipse cx="128" cy="56" rx="8" ry="10" fill={hit("rear_delt")} stroke="#555" strokeWidth="0.5"/>
-      <ellipse cx="172" cy="56" rx="8" ry="10" fill={hit("rear_delt")} stroke="#555" strokeWidth="0.5"/>
-      {/* Lats */}
-      <ellipse cx="135" cy="75" rx="10" ry="20" fill={hit("lats")} stroke="#555" strokeWidth="0.5"/>
-      <ellipse cx="165" cy="75" rx="10" ry="20" fill={hit("lats")} stroke="#555" strokeWidth="0.5"/>
-      {/* Mid back / rhomboids */}
-      <rect x="138" y="58" width="24" height="20" rx="3" fill={hit("mid_back")} stroke="#555" strokeWidth="0.5"/>
-      {/* Lower back */}
-      <rect x="140" y="88" width="20" height="22" rx="4" fill={hit("lower_back")} stroke="#555" strokeWidth="0.5"/>
-      {/* Triceps */}
-      <rect x="120" y="68" width="10" height="24" rx="5" fill={hit("triceps")} stroke="#555" strokeWidth="0.5"/>
-      <rect x="170" y="68" width="10" height="24" rx="5" fill={hit("triceps")} stroke="#555" strokeWidth="0.5"/>
-      {/* Glutes */}
-      <ellipse cx="144" cy="124" rx="12" ry="14" fill={hit("glutes")} stroke="#555" strokeWidth="0.5"/>
-      <ellipse cx="156" cy="124" rx="12" ry="14" fill={hit("glutes")} stroke="#555" strokeWidth="0.5"/>
-      {/* Hamstrings */}
-      <rect x="133" y="136" width="14" height="36" rx="6" fill={hit("hamstrings")} stroke="#555" strokeWidth="0.5"/>
-      <rect x="153" y="136" width="14" height="36" rx="6" fill={hit("hamstrings")} stroke="#555" strokeWidth="0.5"/>
-      {/* Knees back */}
-      <ellipse cx="140" cy="176" rx="8" ry="6" fill="#2a2a2a" stroke="#444" strokeWidth="0.5"/>
-      <ellipse cx="160" cy="176" rx="8" ry="6" fill="#2a2a2a" stroke="#444" strokeWidth="0.5"/>
-      {/* Calves back */}
-      <rect x="133" y="183" width="13" height="30" rx="6" fill={hit("calves")} stroke="#555" strokeWidth="0.5"/>
-      <rect x="154" y="183" width="13" height="30" rx="6" fill={hit("calves")} stroke="#555" strokeWidth="0.5"/>
-      {/* Label */}
-      <text x="150" y="375" textAnchor="middle" style={{ fontSize:8, fill:"#666", fontFamily:"'DM Sans'" }}>BACK</text>
+      {/* BACK */}
+      <ellipse cx="163" cy="18" rx="12" ry="14" fill="#222" stroke="#444" strokeWidth="0.8"/>
+      <path d="M158,30 Q163,36 168,30 L169,40 Q163,44 157,40 Z" fill="#1e1e1e" stroke="#333" strokeWidth="0.5"/>
+      <path d="M140,42 Q163,36 186,42 Q190,52 184,60 Q174,56 163,55 Q152,56 142,60 Q136,52 140,42 Z" fill={c("traps")} stroke={cs("traps")} strokeWidth="0.6"/>
+      <path d="M132,50 Q122,53 120,63 Q120,72 128,74 Q134,72 136,63 Q136,52 132,50 Z" fill={c("rear_delt")} stroke={cs("rear_delt")} strokeWidth="0.6"/>
+      <path d="M194,50 Q204,53 206,63 Q206,72 198,74 Q192,72 190,63 Q190,52 194,50 Z" fill={c("rear_delt")} stroke={cs("rear_delt")} strokeWidth="0.6"/>
+      <path d="M123,68 Q119,76 119,86 Q119,96 123,98 Q127,99 130,94 Q132,86 131,76 Q130,68 126,66 Z" fill={c("triceps")} stroke={cs("triceps")} strokeWidth="0.5"/>
+      <path d="M203,68 Q207,76 207,86 Q207,96 203,98 Q199,99 196,94 Q194,86 195,76 Q196,68 200,66 Z" fill={c("triceps")} stroke={cs("triceps")} strokeWidth="0.5"/>
+      <path d="M120,98 Q117,106 117,114 Q118,120 122,121 Q126,120 128,114 Q129,106 127,98 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
+      <path d="M206,98 Q209,106 209,114 Q208,120 204,121 Q200,120 198,114 Q197,106 199,98 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
+      <path d="M137,56 Q130,66 128,82 Q127,96 132,106 Q138,112 144,108 Q148,98 147,82 Q147,66 141,56 Z" fill={c("lats")} stroke={cs("lats")} strokeWidth="0.6"/>
+      <path d="M189,56 Q196,66 198,82 Q199,96 194,106 Q188,112 182,108 Q178,98 179,82 Q179,66 185,56 Z" fill={c("lats")} stroke={cs("lats")} strokeWidth="0.6"/>
+      <path d="M144,56 Q163,52 182,56 Q184,68 182,76 Q163,80 144,76 Q142,68 144,56 Z" fill={c("mid_back")} stroke={cs("mid_back")} strokeWidth="0.6"/>
+      <path d="M150,86 Q163,82 176,86 Q178,100 176,112 Q163,116 150,112 Q148,100 150,86 Z" fill={c("lower_back")} stroke={cs("lower_back")} strokeWidth="0.6"/>
+      <path d="M146,116 Q138,122 136,134 Q136,147 142,151 Q150,155 157,151 Q162,144 160,132 Q158,120 150,115 Z" fill={c("glutes")} stroke={cs("glutes")} strokeWidth="0.6"/>
+      <path d="M180,116 Q188,122 190,134 Q190,147 184,151 Q176,155 169,151 Q164,144 166,132 Q168,120 176,115 Z" fill={c("glutes")} stroke={cs("glutes")} strokeWidth="0.6"/>
+      <path d="M138,150 Q132,158 132,170 Q132,180 136,184 Q142,188 147,183 Q150,174 149,162 Q148,152 142,149 Z" fill={c("hamstrings")} stroke={cs("hamstrings")} strokeWidth="0.6"/>
+      <path d="M147,149 Q151,158 150,172 Q150,183 146,186 Q140,188 137,184 Q133,178 133,168 Q133,156 140,150 Z" fill={c("hamstrings")} stroke={cs("hamstrings")} strokeWidth="0.6" opacity="0.85"/>
+      <path d="M188,150 Q194,158 194,170 Q194,180 190,184 Q184,188 179,183 Q176,174 177,162 Q178,152 184,149 Z" fill={c("hamstrings")} stroke={cs("hamstrings")} strokeWidth="0.6"/>
+      <path d="M179,149 Q175,158 175,172 Q175,183 179,186 Q185,188 188,184 Q192,178 192,168 Q192,156 185,150 Z" fill={c("hamstrings")} stroke={cs("hamstrings")} strokeWidth="0.6" opacity="0.85"/>
+      <ellipse cx="142" cy="187" rx="8" ry="6" fill="#1e1e1e" stroke="#3a3a3a" strokeWidth="0.5"/>
+      <ellipse cx="184" cy="187" rx="8" ry="6" fill="#1e1e1e" stroke="#3a3a3a" strokeWidth="0.5"/>
+      <path d="M135,193 Q130,203 131,214 Q132,221 137,223 Q142,224 145,219 Q147,210 146,200 Q144,192 139,191 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.6"/>
+      <path d="M140,191 Q144,200 143,212 Q142,220 138,223 Q134,222 132,218 Q130,210 131,200 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.6" opacity="0.8"/>
+      <path d="M191,193 Q196,203 195,214 Q194,221 189,223 Q184,224 181,219 Q179,210 180,200 Q182,192 187,191 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.6"/>
+      <path d="M186,191 Q182,200 183,212 Q184,220 188,223 Q192,222 194,218 Q196,210 195,200 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.6" opacity="0.8"/>
+      <ellipse cx="139" cy="225" rx="9" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
+      <ellipse cx="185" cy="225" rx="9" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
+      <text x="163" y="233" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"'DM Sans'", letterSpacing:2 }}>BACK</text>
     </svg>
   );
 }
@@ -1773,6 +1791,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [restDuration,setRestDuration]=useState(90);
   const [logDate,setLogDate]=useState(()=>new Date().toDateString()); // food log history
   const [expandedSession,setExpandedSession]=useState(null); // workout history detail
+  const [volumeExercise,setVolumeExercise]=useState(null); // exercise to show volume chart for
   const [notifEnabled,setNotifEnabled]=useState(()=>lsGet('im_notifEnabled',false));
   const [bodyMeasurements,setBodyMeasurements]=useState(()=>lsGet('im_bodyMeasurements',[]));
   const [newMeasurement,setNewMeasurement]=useState({ chest:"", waist:"", hips:"", arms:"", thighs:"" });
@@ -1889,7 +1908,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   useEffect(()=>{
     if(!restTimer) return;
     if(restTimer.seconds<=0){
-      // Vibrate if supported
+      playZenBowl();
       try { navigator.vibrate?.([200,100,200]); } catch {}
       setRestTimer(null);
       return;
@@ -2070,7 +2089,45 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
     setNewSleep({ hours:"", quality:3, soreness:3 });
   };
 
-  const startWorkout=(t, loadExercises=false)=>{ setShowExercisePicker(false); setExerciseSearch(""); setTab("workout"); setWorkoutSeconds(0); setTimerRunning(false); setRestTimer(null); setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises: loadExercises ? t.exercises.map(n=>({ name:n, sets:[{reps:"",weight:"",done:false}] })) : [], template:t.exercises||[] }); };
+  const startWorkout=(t, loadExercises=false)=>{
+    setShowExercisePicker(false); setExerciseSearch(""); setTab("workout");
+    setWorkoutSeconds(0); setTimerRunning(false); setRestTimer(null);
+
+    // Build a map of last used reps/weight per exercise from session history
+    const lastUsed = {};
+    [...sessions].reverse().forEach(s => {
+      s.exercises?.forEach(ex => {
+        if (!lastUsed[ex.name]) {
+          const lastSet = [...(ex.sets||[])].reverse().find(st=>st.reps||st.weight);
+          if (lastSet) lastUsed[ex.name] = { reps: lastSet.reps||"", weight: lastSet.weight||"" };
+        }
+      });
+    });
+
+    const makeExercise = (name) => ({
+      name,
+      sets: [{ reps: lastUsed[name]?.reps||"", weight: lastUsed[name]?.weight||"", done:false }]
+    });
+
+    setActiveSession({
+      id:Date.now(), name:t.name,
+      start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}),
+      exercises: loadExercises ? t.exercises.map(makeExercise) : [],
+      template: t.exercises||[]
+    });
+  };
+  const addExerciseToSession = (name) => {
+    const lastUsed = {};
+    [...sessions].reverse().forEach(s => {
+      s.exercises?.forEach(ex => {
+        if (!lastUsed[ex.name]) {
+          const lastSet = [...(ex.sets||[])].reverse().find(st=>st.reps||st.weight);
+          if (lastSet) lastUsed[ex.name] = { reps:lastSet.reps||"", weight:lastSet.weight||"" };
+        }
+      });
+    });
+    setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name, sets:[{ reps:lastUsed[name]?.reps||"", weight:lastUsed[name]?.weight||"", done:false }] }] }));
+  };
   const addSet=(ei)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i===ei?{ ...ex, sets:[...ex.sets,{reps:"",weight:"",done:false}] }:ex) }));
   const updateSet=(ei,si,f,v)=>{
     setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st,[f]:v }) }) }));
@@ -2081,7 +2138,28 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
       exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st, done:!st.done }) })
     }));
   };
-  const formatTime=(s)=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+  const playZenBowl = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const gain2 = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc2.connect(gain2); gain2.connect(ctx.destination);
+      osc.frequency.setValueAtTime(528, ctx.currentTime);
+      osc2.frequency.setValueAtTime(1056, ctx.currentTime);
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.5);
+      gain2.gain.setValueAtTime(0, ctx.currentTime);
+      gain2.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.8);
+      osc.type = "sine"; osc2.type = "sine";
+      osc.start(); osc2.start();
+      osc.stop(ctx.currentTime + 3); osc2.stop(ctx.currentTime + 2);
+    } catch {}
+  };
   const finishWorkout=()=>{
     const exerciseNames = activeSession.exercises.map(e=>e.name);
     setSessions(p=>[...p,{ ...activeSession, end:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), date:today, duration:workoutSeconds }]);
@@ -2565,9 +2643,11 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                     {s.exercises?.map((ex,ei)=>(
                       <div key={ei} style={{ marginBottom:10 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                          <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:1 }}>{ex.name}</div>
+                          <div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:1, cursor:"pointer" }}
+                            onClick={()=>setVolumeExercise(volumeExercise===ex.name?null:ex.name)}>{ex.name}</div>
                           {personalRecords[ex.name]&&ex.sets?.some(st=>parseFloat(st.weight)===personalRecords[ex.name])&&
                             <span style={{ background:RED, color:WHITE, fontSize:9, padding:"1px 5px", fontFamily:"'Bebas Neue'", letterSpacing:1 }}>PR {personalRecords[ex.name]}lbs</span>}
+                          <span style={{ fontSize:10, color:MUTED, cursor:"pointer" }} onClick={()=>setVolumeExercise(volumeExercise===ex.name?null:ex.name)}>📈</span>
                         </div>
                         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                           {ex.sets?.map((st,si)=>(st.reps||st.weight)&&(
@@ -2583,6 +2663,32 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               </div>
             ))}
           </div>}
+
+          {/* Volume chart */}
+          {sessions.length>=2&&(()=>{
+            const allExercises = [...new Set(sessions.flatMap(s=>s.exercises?.map(e=>e.name)||[]))];
+            return allExercises.length>0&&(
+              <div style={S.card}>
+                <div style={S.label}>Volume Progression</div>
+                <div style={{ fontSize:11, color:MUTED, marginBottom:10 }}>Tap an exercise name in history to chart its volume (sets × reps × weight)</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
+                  {allExercises.slice(0,8).map(ex=>(
+                    <button key={ex} onClick={()=>setVolumeExercise(volumeExercise===ex?null:ex)}
+                      style={{ padding:"5px 10px", fontFamily:"'DM Sans'", fontSize:11, background:volumeExercise===ex?RED:CARD2, color:volumeExercise===ex?WHITE:TEXT, border:`1px solid ${volumeExercise===ex?RED:BORDER}`, cursor:"pointer" }}>
+                      {ex}
+                    </button>
+                  ))}
+                </div>
+                {volumeExercise
+                  ? <><div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:1, marginBottom:8 }}>{volumeExercise} — Volume Trend</div>
+                      <VolumeChart sessions={sessions} exercise={volumeExercise}/>
+                      <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:4 }}>Volume = sets × reps × weight (lbs) per session</div>
+                    </>
+                  : <div style={{ textAlign:"center", padding:"16px 0", color:MUTED, fontSize:12 }}>Select an exercise above to see your progression</div>
+                }
+              </div>
+            );
+          })()}
           <div style={S.labelRed}>Quick Start</div>
           <div style={{ fontSize:12, color:MUTED, marginBottom:10 }}>Pick a template or build your own from scratch.</div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
@@ -2743,7 +2849,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                       const already = activeSession.exercises.find(e=>e.name===ex);
                       return (
                         <div key={ex} style={{ display:"flex", alignItems:"center", gap:0 }}>
-                          <button onClick={()=>{ if(already) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:ex, sets:[{reps:"",weight:""}] }] })); }}
+                          <button onClick={()=>{ if(already) return; addExerciseToSession(ex); }}
                             style={{ padding:"7px 12px", fontFamily:"'DM Sans'", fontSize:12, background:already?CARD2:RED, color:already?MUTED:WHITE, border:`1px solid ${already?BORDER:RED}`, borderRight:"none", cursor:already?"default":"pointer" }}>
                             {ex}{already?" ✓":""}
                           </button>
@@ -2757,7 +2863,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
               )}
               {/* Custom entry */}
               {exerciseSearch.trim() && !Object.values(EXERCISE_LIBRARY).flat().find(e=>e.toLowerCase()===exerciseSearch.trim().toLowerCase()) && (
-                <button onClick={()=>{ setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:exerciseSearch.trim(), sets:[{reps:"",weight:""}] }] })); setExerciseSearch(""); setShowExercisePicker(false); }}
+                <button onClick={()=>{ addExerciseToSession(exerciseSearch.trim()); setExerciseSearch(""); setShowExercisePicker(false); }}
                   style={{ ...S.btn, marginBottom:10 }}>+ Add "{exerciseSearch.trim()}"</button>
               )}
               {/* Library grouped */}
@@ -2773,7 +2879,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                           const already = activeSession.exercises.find(e=>e.name===ex);
                           return (
                             <div key={ex} style={{ display:"flex", alignItems:"center", gap:0 }}>
-                              <button onClick={()=>{ if(already) return; setActiveSession(s=>({ ...s, exercises:[...s.exercises,{ name:ex, sets:[{reps:"",weight:""}] }] })); }}
+                              <button onClick={()=>{ if(already) return; addExerciseToSession(ex); }}
                                 style={{ padding:"6px 10px", fontFamily:"'DM Sans'", fontSize:12, background:already?CARD2:CARD, color:already?MUTED:TEXT, border:`1px solid ${already?BORDER:RED}`, borderRight:"none", cursor:already?"default":"pointer", opacity:already?0.6:1 }}>
                                 {ex}{already?" ✓":""}
                               </button>
