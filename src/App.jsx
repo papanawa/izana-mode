@@ -1895,21 +1895,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
     } catch { return {}; }
   })();
 
-  // Check if latest session has any new PRs
-  const latestSessionPRs = (() => {
-    if (!sessions.length) return [];
-    const latest = sessions[sessions.length-1];
-    const prs = [];
-    latest.exercises?.forEach(ex => {
-      ex.sets?.forEach(set => {
-        const w = parseFloat(set.weight);
-        if (!isNaN(w) && w > 0 && personalRecords[ex.name] === w) {
-          if (!prs.find(p=>p.name===ex.name)) prs.push({ name:ex.name, weight:w });
-        }
-      });
-    });
-    return prs;
-  })();
+  // (personalRecords computed above)
   useEffect(()=>lsSet('im_waterLog', waterLog),[waterLog]);
   useEffect(()=>lsSet('im_prevScore', prevScore),[prevScore]);
 
