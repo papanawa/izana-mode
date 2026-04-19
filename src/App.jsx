@@ -1760,6 +1760,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [activeSession,setActiveSession]=useState(()=>lsGet('im_activeSession',null));
   const [saveWorkoutName,setSaveWorkoutName]=useState("");
   const [showSaveWorkout,setShowSaveWorkout]=useState(false);
+  const [pendingSaveExercises,setPendingSaveExercises]=useState([]);
   const [newCardio,setNewCardio]=useState({ type:"Run", duration:"", distance:"", effort:3, caloriesBurned:"", caloriesEstimated:null, estimatingCals:false });
   const [showCardioForm,setShowCardioForm]=useState(false);
   const [editingFood,setEditingFood]=useState(null);
@@ -1767,8 +1768,9 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [exerciseSearch,setExerciseSearch]=useState("");
   const [exerciseDetail,setExerciseDetail]=useState(null);
   const [workoutSeconds,setWorkoutSeconds]=useState(0);
-  const [restTimer,setRestTimer]=useState(null); // { seconds, max } | null
-  const [restDuration,setRestDuration]=useState(90); // default rest 90s
+  const [timerRunning,setTimerRunning]=useState(false);
+  const [restTimer,setRestTimer]=useState(null);
+  const [restDuration,setRestDuration]=useState(90);
   const [logDate,setLogDate]=useState(()=>new Date().toDateString()); // food log history
   const [expandedSession,setExpandedSession]=useState(null); // workout history detail
   const [notifEnabled,setNotifEnabled]=useState(()=>lsGet('im_notifEnabled',false));
@@ -1876,12 +1878,12 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
     setPrevScore(activityScore);
   },[activityScore]);
 
-  // Workout timer — counts up while session is active
+  // Workout timer — only counts when timerRunning is true
   useEffect(()=>{
-    if(!activeSession) { setWorkoutSeconds(0); return; }
+    if(!activeSession || !timerRunning) return;
     const interval = setInterval(()=>setWorkoutSeconds(s=>s+1), 1000);
     return ()=>clearInterval(interval);
-  },[activeSession?.id]);
+  },[activeSession?.id, timerRunning]);
 
   // Rest timer — counts down
   useEffect(()=>{
@@ -2020,9 +2022,14 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const addWater = () => setWaterLog(w=>({...w, cups:Math.min(w.cups+1, 20)}));
   const removeWater = () => setWaterLog(w=>({...w, cups:Math.max(0, w.cups-1)}));
   const saveCurrentWorkout = (name) => {
-    if(!activeSession||!name.trim()) return;
-    const workout={ id:Date.now(), name:name.trim(), exercises:activeSession.exercises.map(e=>e.name) };
+    if(!name.trim()) return;
+    const exercises = activeSession
+      ? activeSession.exercises.map(e=>e.name)
+      : pendingSaveExercises;
+    if(!exercises.length) return;
+    const workout={ id:Date.now(), name:name.trim(), exercises };
     setCustomWorkouts(p=>[...p.filter(w=>w.name!==name.trim()), workout]);
+    setPendingSaveExercises([]);
   };
   const addProgressPhoto = (base64) => {
     const entry={ id:Date.now(), date:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}), base64, weight:bodyMetrics[bodyMetrics.length-1]?.weight||"" };
@@ -2063,7 +2070,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
     setNewSleep({ hours:"", quality:3, soreness:3 });
   };
 
-  const startWorkout=(t)=>{ setShowExercisePicker(false); setExerciseSearch(""); setTab("workout"); setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises:[], template:t.exercises||[] }); };
+  const startWorkout=(t)=>{ setShowExercisePicker(false); setExerciseSearch(""); setTab("workout"); setWorkoutSeconds(0); setTimerRunning(false); setRestTimer(null); setActiveSession({ id:Date.now(), name:t.name, start:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), exercises:[], template:t.exercises||[] }); };
   const addSet=(ei)=>setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i===ei?{ ...ex, sets:[...ex.sets,{reps:"",weight:"",done:false}] }:ex) }));
   const updateSet=(ei,si,f,v)=>{
     setActiveSession(s=>({ ...s, exercises:s.exercises.map((ex,i)=>i!==ei?ex:{ ...ex, sets:ex.sets.map((st,j)=>j!==si?st:{ ...st,[f]:v }) }) }));
@@ -2078,12 +2085,14 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
   };
   const formatTime=(s)=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const finishWorkout=()=>{
+    const exerciseNames = activeSession.exercises.map(e=>e.name);
     setSessions(p=>[...p,{ ...activeSession, end:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), date:today, duration:workoutSeconds }]);
-    // Auto-prompt to save if this was a My Build session
-    if(activeSession.name==="型 — My Build" && activeSession.exercises.length>0) {
+    // Auto-prompt to save My Build sessions — capture exercises BEFORE clearing session
+    if(activeSession.name==="型 — My Build" && exerciseNames.length>0) {
+      setPendingSaveExercises(exerciseNames);
       setShowSaveWorkout(true);
     }
-    setActiveSession(null); setRestTimer(null); setWorkoutSeconds(0);
+    setActiveSession(null); setRestTimer(null); setWorkoutSeconds(0); setTimerRunning(false);
   };
 
   const goalLabel={ cut:"削 Cut", bulk:"増 Bulk", recomp:"変 Recomp", endure:"耐 Endure" };
@@ -2581,14 +2590,14 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
           <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
             {SAMPLE_WORKOUTS.map(w=>(
               <button key={w.id} onClick={()=>startWorkout(w)}
-                style={{ background:CARD, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left" }}>
+                style={{ background:CARD, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left", width:"calc(50% - 4px)", boxSizing:"border-box" }}>
                 <div style={{ fontFamily:"'Bebas Neue'", fontSize:16, letterSpacing:1, color:TEXT }}>{w.name}</div>
                 <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{w.exercises.length} exercises · tap to load</div>
               </button>
             ))}
             {/* My Build tile */}
             <button onClick={()=>startWorkout({ name:"型 — My Build", exercises:[] })}
-              style={{ background:BLACK, border:`1px solid ${RED}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left" }}>
+              style={{ background:BLACK, border:`1px solid ${RED}`, borderBottom:`2px solid ${RED}`, padding:"10px 14px", cursor:"pointer", textAlign:"left", width:"calc(50% - 4px)", boxSizing:"border-box" }}>
               <div style={{ fontFamily:"'Bebas Neue'", fontSize:16, letterSpacing:1, color:WHITE }}>型 — MY BUILD</div>
               <div style={{ fontSize:10, color:RED, marginTop:2 }}>Start from scratch</div>
             </button>
@@ -2641,10 +2650,22 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             <div>
               <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, letterSpacing:1 }}>{activeSession.name}</div>
               <div style={{ fontSize:11, color:MUTED }}>
-                {activeSession.exercises.length} exercise{activeSession.exercises.length!==1?"s":""} · <span style={{ color:RED, fontFamily:"'Bebas Neue'", fontSize:13 }}>{formatTime(workoutSeconds)}</span>
+                {activeSession.exercises.length} exercise{activeSession.exercises.length!==1?"s":""} · <span style={{ color:timerRunning?RED:MUTED, fontFamily:"'Bebas Neue'", fontSize:13 }}>{formatTime(workoutSeconds)}</span>
               </div>
             </div>
-            <button style={{ ...S.btnSm, color:RED }} onClick={()=>setActiveSession(null)}>Quit</button>
+            <div style={{ display:"flex", gap:6 }}>
+              {!timerRunning
+                ? <button style={{ background:RED, color:WHITE, border:"none", padding:"8px 12px", fontFamily:"'Bebas Neue'", fontSize:12, letterSpacing:1, cursor:"pointer" }}
+                    onClick={()=>setTimerRunning(true)}>
+                    始 START
+                  </button>
+                : <button style={{ background:"transparent", color:RED, border:`1px solid ${RED}`, padding:"8px 12px", fontFamily:"'Bebas Neue'", fontSize:12, letterSpacing:1, cursor:"pointer" }}
+                    onClick={()=>setTimerRunning(false)}>
+                    止 PAUSE
+                  </button>
+              }
+              <button style={{ ...S.btnSm, color:MUTED }} onClick={()=>{ setActiveSession(null); setTimerRunning(false); setWorkoutSeconds(0); }}>Quit</button>
+            </div>
           </div>
 
           {/* Empty state */}
@@ -2768,10 +2789,10 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
             {/* Rest duration selector */}
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
               <span style={{ fontSize:11, color:MUTED, flexShrink:0 }}>Rest timer:</span>
-              {[60,90,120,180].map(s=>(
+              {[{s:60,label:"1M"},{s:90,label:"1.5M"},{s:120,label:"2M"},{s:180,label:"3M"}].map(({s,label})=>(
                 <button key={s} onClick={()=>setRestDuration(s)}
                   style={{ flex:1, padding:"6px 0", fontFamily:"'Bebas Neue'", fontSize:12, background:restDuration===s?RED:CARD2, color:restDuration===s?WHITE:MUTED, border:`1px solid ${restDuration===s?RED:BORDER}`, cursor:"pointer" }}>
-                  {s<60?`${s}s`:`${s/60}${s%60?`.${s%60}`:""}m`}
+                  {label}
                 </button>
               ))}
             </div>
@@ -2782,10 +2803,10 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                   <button style={S.btnSmRed} onClick={()=>{ saveCurrentWorkout(saveWorkoutName); setSaveWorkoutName(""); setShowSaveWorkout(false); }}>Save</button>
                   <button style={S.btnSm} onClick={()=>setShowSaveWorkout(false)}>✕</button>
                 </div>
-              : <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>setShowSaveWorkout(true)}>💾 Save as Template</button>
+              : <button style={{ ...S.btnBlack, marginBottom:8 }} onClick={()=>setShowSaveWorkout(true)}>💾 保存 Save as Template</button>
             }
             <button style={S.btn} onClick={finishWorkout}>
-              ✓ Finish Workout · {formatTime(workoutSeconds)}
+              完 FINISH WORKOUT · {formatTime(workoutSeconds)}
             </button>
           </>}
         </>)}
