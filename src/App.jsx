@@ -1630,6 +1630,8 @@ const EXERCISE_INFO = {
 function MuscleBodyDiagram({ primary=[], secondary=[] }) {
   const c  = (m) => primary.includes(m) ? RED : secondary.includes(m) ? "#E8836B" : "#2a2a2a";
   const cs = (m) => primary.includes(m) ? RED : secondary.includes(m) ? "#c06040" : "#3a3a3a";
+  const chestCol = primary.includes("chest")||primary.includes("lower_chest") ? RED : secondary.includes("chest")||secondary.includes("lower_chest") ? "#E8836B" : "#2a2a2a";
+  const chestStk = primary.includes("chest")||primary.includes("lower_chest") ? RED : secondary.includes("chest")||secondary.includes("lower_chest") ? "#c06040" : "#3a3a3a";
   return (
     <svg viewBox="0 0 220 242" width="100%" style={{ maxHeight:300, display:"block", margin:"0 auto" }}>
       {/* FRONT */}
@@ -1640,7 +1642,7 @@ function MuscleBodyDiagram({ primary=[], secondary=[] }) {
       <ellipse cx="22" cy="61" rx="5" ry="7" fill={c("side_delt")} stroke={cs("side_delt")} strokeWidth="0.5"/>
       <ellipse cx="98" cy="61" rx="5" ry="7" fill={c("side_delt")} stroke={cs("side_delt")} strokeWidth="0.5"/>
       <path d="M38,44 Q60,38 82,44 Q86,56 78,64 Q60,68 42,64 Q34,56 38,44 Z" fill={c("upper_chest")} stroke={cs("upper_chest")} strokeWidth="0.6"/>
-      <path d="M40,62 Q60,68 80,62 Q80,76 70,80 Q60,83 50,80 Q40,76 40,62 Z" fill={primary.includes("chest")||primary.includes("lower_chest")?RED:secondary.includes("chest")||secondary.includes("lower_chest")?"#E8836B":"#2a2a2a"} stroke={primary.includes("chest")||primary.includes("lower_chest")?RED:secondary.includes("chest")||secondary.includes("lower_chest")?"#c06040":"#3a3a3a"} strokeWidth="0.6"/>
+      <path d="M40,62 Q60,68 80,62 Q80,76 70,80 Q60,83 50,80 Q40,76 40,62 Z" fill={chestCol} stroke={chestStk} strokeWidth="0.6"/>
       <path d="M24,66 Q19,72 19,82 Q19,92 24,95 Q28,96 31,91 Q33,84 32,74 Q31,66 27,64 Z" fill={c("biceps")} stroke={cs("biceps")} strokeWidth="0.5"/>
       <path d="M96,66 Q101,72 101,82 Q101,92 96,95 Q92,96 89,91 Q87,84 88,74 Q89,66 93,64 Z" fill={c("biceps")} stroke={cs("biceps")} strokeWidth="0.5"/>
       <path d="M20,95 Q17,103 17,112 Q18,119 22,120 Q26,120 28,116 Q30,108 29,100 Q28,94 24,93 Z" fill={c("forearms")} stroke={cs("forearms")} strokeWidth="0.5"/>
@@ -1662,8 +1664,7 @@ function MuscleBodyDiagram({ primary=[], secondary=[] }) {
       <path d="M70,178 Q74,188 73,202 Q72,212 67,215 Q63,216 60,212 Q58,203 59,190 Q61,180 66,177 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.5"/>
       <ellipse cx="44" cy="217" rx="8" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
       <ellipse cx="67" cy="217" rx="8" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
-      <text x="57" y="233" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"'DM Sans'", letterSpacing:2 }}>FRONT</text>
-
+      <text x="57" y="233" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"DM Sans", letterSpacing:2 }}>FRONT</text>
       {/* BACK */}
       <ellipse cx="163" cy="18" rx="12" ry="14" fill="#222" stroke="#444" strokeWidth="0.8"/>
       <path d="M158,30 Q163,36 168,30 L169,40 Q163,44 157,40 Z" fill="#1e1e1e" stroke="#333" strokeWidth="0.5"/>
@@ -1692,7 +1693,7 @@ function MuscleBodyDiagram({ primary=[], secondary=[] }) {
       <path d="M186,191 Q182,200 183,212 Q184,220 188,223 Q192,222 194,218 Q196,210 195,200 Z" fill={c("calves")} stroke={cs("calves")} strokeWidth="0.6" opacity="0.8"/>
       <ellipse cx="139" cy="225" rx="9" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
       <ellipse cx="185" cy="225" rx="9" ry="4" fill="#1a1a1a" stroke="#333" strokeWidth="0.4"/>
-      <text x="163" y="233" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"'DM Sans'", letterSpacing:2 }}>BACK</text>
+      <text x="163" y="233" textAnchor="middle" style={{ fontSize:7, fill:"#555", fontFamily:"DM Sans", letterSpacing:2 }}>BACK</text>
     </svg>
   );
 }
@@ -2665,7 +2666,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
           </div>}
 
           {/* Volume chart */}
-          {sessions.length>=2&&(()=>{
+          {sessions.length>=2 && (() => {
             const allExercises = [...new Set(sessions.flatMap(s=>s.exercises?.map(e=>e.name)||[]))];
             if(!allExercises.length) return null;
             return (
@@ -2683,7 +2684,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 {volumeExercise
                   ? <><div style={{ fontFamily:"'Bebas Neue'", fontSize:13, color:RED, letterSpacing:1, marginBottom:8 }}>{volumeExercise} — Volume Trend</div>
                       <VolumeChart sessions={sessions} exercise={volumeExercise}/>
-                      <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:4 }}>Volume = sets × reps × weight (lbs) per session</div>
+                      <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:4 }}>Volume = sets × reps × weight (lbs)</div>
                     </>
                   : <div style={{ textAlign:"center", padding:"16px 0", color:MUTED, fontSize:12 }}>Select an exercise above to see your progression</div>
                 }
