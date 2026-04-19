@@ -1441,7 +1441,7 @@ function Onboarding({ onComplete }) {
         <div style={{ width:"100%", marginBottom:20 }}>
           <div style={{ fontFamily:"'Bebas Neue'", fontSize:12, color:MUTED, letterSpacing:3, marginBottom:8 }}>YOUR NAME</div>
           <input value={name} onChange={e=>setName(e.target.value)} placeholder="Enter your name..."
-            style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:TEXT, border:"none", borderBottom:`2px solid ${name?RED:BORDER}`, fontFamily:"'Bebas Neue'", fontSize:24, letterSpacing:2, padding:"8px 0", outline:"none", transition:"border-color 0.3s" }}/>
+            style={{ width:"100%", boxSizing:"border-box", background:"transparent", color:"#111111", border:"none", borderBottom:`2px solid ${name?RED:"#aaa"}`, fontFamily:"'Bebas Neue'", fontSize:24, letterSpacing:2, padding:"8px 0", outline:"none", transition:"border-color 0.3s" }}/>
         </div>
 
         {/* Goal */}
