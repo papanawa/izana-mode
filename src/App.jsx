@@ -1806,7 +1806,15 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [showSettings,setShowSettings]=useState(false);
   const [rankNotif,setRankNotif]=useState(null);
   const [prevScore,setPrevScore]=useState(()=>lsGet('im_prevScore',0));
-  const [activeSession,setActiveSession]=useState(()=>lsGet('im_activeSession',null));
+  const [activeSession,setActiveSession]=useState(()=>{
+    const saved = lsGet('im_activeSession', null);
+    // Validate session — exercises must be objects with sets array, not strings
+    if (saved && saved.exercises?.length > 0 && typeof saved.exercises[0] === 'string') {
+      try { localStorage.removeItem('im_activeSession'); } catch {}
+      return null;
+    }
+    return saved;
+  });
   const [saveWorkoutName,setSaveWorkoutName]=useState("");
   const [showSaveWorkout,setShowSaveWorkout]=useState(false);
   const [pendingSaveExercises,setPendingSaveExercises]=useState([]);
@@ -2809,7 +2817,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 <span style={{ flex:0.4, fontSize:9, color:MUTED, textAlign:"center", letterSpacing:1 }}>✓</span>
                 <span style={{ flex:0.3 }}/>
               </div>
-              {ex.sets.map((st,si)=>(
+              {(ex.sets||[]).map((st,si)=>(
                 <div key={si}>
                   <div style={{ ...S.setRow, alignItems:"center", opacity:st.done?0.55:1, background:st.done?`${RED}08`:"transparent", borderLeft:st.done?`2px solid ${RED}`:"2px solid transparent", paddingLeft:st.done?6:0, marginBottom:2, transition:"all 0.2s" }}>
                     <span style={{ flex:0.4, fontFamily:"'Bebas Neue'", fontSize:17, color:st.done?RED:MUTED, textAlign:"center" }}>{si+1}</span>
