@@ -50,3 +50,19 @@ function checkAndFire() {
 
 // Check every minute via a keepalive ping from the app
 // (true push requires a push server — this approach works while app is open/backgrounded on mobile PWA)
+
+// ── TRUE PUSH EVENTS (from server) ────────────────────────────────────────────
+self.addEventListener('push', (e) => {
+  let data = { title: 'Izana Mode', body: "Time to train. 🔥", tag: 'push' };
+  try { data = e.data?.json() || data; } catch {}
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: data.tag || 'push',
+      renotify: true,
+      data: { url: '/' },
+    })
+  );
+});

@@ -529,13 +529,14 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
       setError("Lookup timed out. Check your connection and try again.");
     }, 20000);
     try {
+      // 1️⃣ Open Food Facts
       const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
       const data = await res.json();
       if (data.status===1 && data.product) {
         const p = data.product, n = p.nutriments||{};
         const sg = parseFloat(p.serving_quantity)||100, f = sg/100;
         clearTimeout(timeout);
-        selectResult({
+        return selectResult({
           name: p.product_name||p.product_name_en||"Unknown Product",
           calories: Math.round((n["energy-kcal_100g"]||0)*f),
           protein: Math.round((n.proteins_100g||0)*f*10)/10,
@@ -544,25 +545,47 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
           fiber: Math.round((n.fiber_100g||0)*f*10)/10,
           sugar: Math.round((n.sugars_100g||0)*f*10)/10,
           serving: p.serving_size||"1 serving",
-          confidence:"high", notes:`Barcode: ${code}`
+          confidence:"high", notes:`Open Food Facts · Barcode: ${code}`
         });
-      } else {
-        // Fallback to AI search using the barcode as a product lookup
-        try {
-          const aiRes = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:800,
-              messages:[{ role:"user", content:`A product with barcode ${code} was not found in the Open Food Facts database. Based on the barcode number alone, try to estimate what common product this might be, or provide a reasonable generic food entry. Respond ONLY with valid JSON (no markdown): {"name":"product name or best guess","calories":number,"protein":number,"carbs":number,"fat":number,"fiber":number,"sugar":number,"serving":"1 serving","confidence":"low","notes":"Not found in database — AI estimate only"}` }]
-            })
+      }
+
+      // 2️⃣ USDA FoodData Central
+      try {
+        const usdaRes = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${code}&api_key=DEMO_KEY&limit=1`);
+        const usdaData = await usdaRes.json();
+        const food = usdaData.foods?.[0];
+        if (food) {
+          const get = (n) => Math.round((food.foodNutrients?.find(x=>x.nutrientName?.toLowerCase().includes(n))?.value||0)*10)/10;
+          clearTimeout(timeout);
+          return selectResult({
+            name: food.description||"Unknown Product",
+            calories: Math.round(food.foodNutrients?.find(x=>x.nutrientName==="Energy")?.value||0),
+            protein: get("protein"),
+            carbs: get("carbohydrate"),
+            fat: get("total lipid"),
+            fiber: get("fiber"),
+            sugar: get("sugars"),
+            serving: `${food.servingSize||100}${food.servingSizeUnit||"g"}`,
+            confidence:"high", notes:`USDA FoodData · Barcode: ${code}`
           });
-          const aiData = await aiRes.json();
-          const txt = aiData.content?.find(b=>b.type==="text")?.text||"";
-          clearTimeout(timeout);
-          selectResult(JSON.parse(txt.replace(/```json|```/g,"").trim()));
-        } catch {
-          clearTimeout(timeout);
-          setError("Product not found. Try the Search or Photo tab instead.");
-          setLoading(false);
         }
+      } catch {}
+
+      // 3️⃣ Claude AI fallback
+      try {
+        const aiRes = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:800,
+            messages:[{ role:"user", content:`A product with barcode ${code} was not found in Open Food Facts or USDA databases. Based on the barcode number alone, try to estimate what common product this might be, or provide a reasonable generic food entry. Respond ONLY with valid JSON (no markdown): {"name":"product name or best guess","calories":number,"protein":number,"carbs":number,"fat":number,"fiber":number,"sugar":number,"serving":"1 serving","confidence":"low","notes":"Not found in database — AI estimate only"}` }]
+          })
+        });
+        const aiData = await aiRes.json();
+        const txt = aiData.content?.find(b=>b.type==="text")?.text||"";
+        clearTimeout(timeout);
+        selectResult(JSON.parse(txt.replace(/```json|```/g,"").trim()));
+      } catch {
+        clearTimeout(timeout);
+        setError("Product not found. Try the Search or Photo tab instead.");
+        setLoading(false);
       }
     } catch {
       clearTimeout(timeout);
@@ -1592,15 +1615,26 @@ function FriendsPanel({ user, session, onClose }) {
     setLoadingBoard(true);
     try {
       const data = await sbGetLeaderboard(token, userId);
-      // Parse and rank
+      const weekAgo = Date.now() - 7*24*60*60*1000;
       const rows = data.map(row => {
-        const prof = typeof row.profiles === "string" ? JSON.parse(row.profiles||"{}") : (row.profiles||{});
-        const sessions = Array.isArray(row.sessions) ? row.sessions : (JSON.parse(row.sessions||"[]"));
-        const weekAgo = Date.now() - 7*24*60*60*1000;
+        const prof     = typeof row.profiles==="string" ? JSON.parse(row.profiles||"{}") : (row.profiles||{});
+        const sessions = Array.isArray(row.sessions) ? row.sessions : JSON.parse(row.sessions||"[]");
+        const sleepLog = Array.isArray(row.sleep_log) ? row.sleep_log : JSON.parse(row.sleep_log||"[]");
         const weeklyWorkouts = sessions.filter(s => new Date(s.date||0).getTime() > weekAgo).length;
-        const streak = sessions.length; // simplified — total sessions as proxy
-        return { id:row.user_id, name:prof.name||"Unknown", weeklyWorkouts, totalSessions:sessions.length, isMe:row.user_id===userId };
-      }).sort((a,b)=>b.weeklyWorkouts-a.weeklyWorkouts);
+        // Streak — consecutive days with at least one session
+        const sessionDays = new Set(sessions.map(s=>s.date).filter(Boolean));
+        let streak = 0;
+        for (let i=0; i<30; i++) {
+          const d = new Date(); d.setDate(d.getDate()-i);
+          const ds = d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+          if (sessionDays.has(ds)) streak++; else if (i>0) break;
+        }
+        // Avg sleep score (quality - soreness + 3, capped 1-5)
+        const avgSleep = sleepLog.length
+          ? Math.round(sleepLog.slice(-7).reduce((a,s)=>a+((s.quality||3)-(s.soreness||3)+3),0)/Math.min(sleepLog.slice(-7).length,7)*10)/10
+          : 0;
+        return { id:row.user_id, name:prof.name||"Unknown", weeklyWorkouts, totalSessions:sessions.length, streak, avgSleep, isMe:row.user_id===userId };
+      }).sort((a,b)=>b.weeklyWorkouts-a.weeklyWorkouts||b.streak-a.streak||b.avgSleep-a.avgSleep);
       setLeaderboard(rows);
     } catch { setMsg("Couldn't load leaderboard"); }
     setLoadingBoard(false);
@@ -1771,19 +1805,22 @@ function FriendsPanel({ user, session, onClose }) {
                   Add friends to see the leaderboard
                 </div>
               : leaderboard.map((row,i)=>(
-                <div key={row.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:row.isMe?"#1a0a0a":"#111", border:`1px solid ${row.isMe?RED+"44":"#2a2a2a"}`, marginBottom:6 }}>
-                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:i===0?RED:i===1?"#aaa":i===2?"#c87533":MUTED, width:28, textAlign:"center" }}>
-                    {i===0?"1":i===1?"2":i===2?"3":`${i+1}`}
+                <div key={row.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", background:row.isMe?"#1a0a0a":"#111", border:`1px solid ${row.isMe?RED+"44":"#2a2a2a"}`, marginBottom:6 }}>
+                  <div style={{ fontFamily:"'Bebas Neue'", fontSize:26, color:i===0?RED:i===1?"#aaa":i===2?"#c87533":MUTED, width:24, textAlign:"center", flexShrink:0 }}>
+                    {i+1}
                   </div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:15, color:row.isMe?RED:WHITE, letterSpacing:1 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:14, color:row.isMe?RED:WHITE, letterSpacing:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                       {row.name}{row.isMe?" (You)":""}
                     </div>
-                    <div style={{ fontSize:11, color:MUTED }}>{row.totalSessions} total sessions</div>
+                    <div style={{ display:"flex", gap:10, marginTop:3 }}>
+                      <span style={{ fontSize:10, color:MUTED }}>🔥 {row.streak}d streak</span>
+                      {row.avgSleep>0&&<span style={{ fontSize:10, color:MUTED }}>😴 {row.avgSleep} sleep</span>}
+                    </div>
                   </div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:22, color:row.weeklyWorkouts>0?RED:MUTED }}>{row.weeklyWorkouts}</div>
-                    <div style={{ fontSize:10, color:MUTED }}>workouts this week</div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:22, color:row.weeklyWorkouts>0?RED:MUTED, lineHeight:1 }}>{row.weeklyWorkouts}</div>
+                    <div style={{ fontSize:9, color:MUTED, letterSpacing:0.5 }}>this week</div>
                   </div>
                 </div>
               ))
@@ -2250,19 +2287,25 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const enableNotifications = async () => {
     if (!("Notification" in window)) return alert("Notifications not supported on this device.");
     const permission = await Notification.requestPermission();
-    if (permission === "granted") {
-      setNotifEnabled(true);
-      // Register SW first
+    if (permission !== "granted") {
+      setNotifEnabled(false);
+      return alert("Notification permission denied. Enable in your browser settings.");
+    }
+    setNotifEnabled(true);
+    try {
       if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.ready;
-        reg.showNotification("Izana Mode 🎌", { body:"Notifications active — we'll remind you to log meals and workouts.", icon:"/icons/icon-192.png", tag:"setup" });
-      } else {
-        new Notification("Izana Mode 🎌", { body:"Notifications enabled!", icon:"/icon-192.png" });
+        // Attempt push subscription (works when VAPID key is configured)
+        try {
+          const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: null });
+          lsSet('im_pushSub', JSON.stringify(sub));
+        } catch {}
+        reg.showNotification("Izana Mode 🎌", {
+          body:"Notifications active — we'll remind you to log meals and workouts.",
+          icon:"/icons/icon-192.png", tag:"setup"
+        });
       }
-    } else {
-      setNotifEnabled(false);
-      alert("Notification permission denied. Enable in your browser settings.");
-    }
+    } catch {}
   };
 
   const addMeasurement = () => {
@@ -3557,36 +3600,36 @@ export default function App() {
     setSession(newSession);
     setCloudLoading(true);
 
-    // Try to load existing cloud data
     const userId = parseJwt(newSession.access_token)?.sub;
+    const email = parseJwt(newSession.access_token)?.email || "";
+
     if (userId) {
       const cloudData = await sbLoadData(newSession.access_token, userId);
       if (cloudData?.user_profile) {
-        // Returning user — restore their data
         const p = cloudData.user_profile;
         lsSet('im_user', p);
         setUser(p);
-        if (cloudData.food_log)      lsSet('im_foodLog',       cloudData.food_log);
-        if (cloudData.sessions)      lsSet('im_sessions',      cloudData.sessions);
-        if (cloudData.body_metrics)  lsSet('im_bodyMetrics',   cloudData.body_metrics);
-        if (cloudData.sleep_log)     lsSet('im_sleepLog',      cloudData.sleep_log);
-        if (cloudData.favorites)     lsSet('im_favorites',     cloudData.favorites);
-        if (cloudData.profiles)      lsSet('oja_profiles',     cloudData.profiles);
-        if (cloudData.cardio_log)    lsSet('im_cardioLog',     cloudData.cardio_log);
+        if (cloudData.food_log)        lsSet('im_foodLog',        cloudData.food_log);
+        if (cloudData.sessions)        lsSet('im_sessions',       cloudData.sessions);
+        if (cloudData.body_metrics)    lsSet('im_bodyMetrics',    cloudData.body_metrics);
+        if (cloudData.sleep_log)       lsSet('im_sleepLog',       cloudData.sleep_log);
+        if (cloudData.favorites)       lsSet('im_favorites',      cloudData.favorites);
+        if (cloudData.profiles)        lsSet('oja_profiles',      cloudData.profiles);
+        if (cloudData.cardio_log)      lsSet('im_cardioLog',      cloudData.cardio_log);
         if (cloudData.custom_workouts) lsSet('im_customWorkouts', cloudData.custom_workouts);
+        // Always keep public profile current for friend search
+        sbUpsertProfile(newSession.access_token, userId, p.name||"", email);
         setCloudLoading(false);
-        setWelcomed(false); // show welcome back screen
+        setWelcomed(false);
         return;
       }
     }
 
-    // New user — if name provided (from signup), pre-fill
     if (name) lsSet('im_pending_name', name);
     setCloudLoading(false);
   };
 
   const handleComplete = async (d) => {
-    // Merge any pending name from Google/email signup
     const pendingName = lsGet('im_pending_name', null);
     const finalUser = pendingName ? { ...d, name: pendingName } : d;
     try { localStorage.removeItem('im_pending_name'); } catch {}
@@ -3596,10 +3639,14 @@ export default function App() {
     setUser(finalUser);
     setWelcomed(true);
 
-    // Save to cloud if authenticated
     if (session) {
       const userId = parseJwt(session.access_token)?.sub;
-      if (userId) sbUpsertData(session.access_token, userId, { user_profile: finalUser });
+      const email  = parseJwt(session.access_token)?.email || "";
+      if (userId) {
+        sbUpsertData(session.access_token, userId, { user_profile: finalUser });
+        // Write to public profiles table immediately so friends can find this user
+        sbUpsertProfile(session.access_token, userId, finalUser.name||"", email);
+      }
     }
   };
 
