@@ -1782,7 +1782,13 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [tab,setTab]=useState("home");
   const [foodLog,setFoodLog]=useState(()=>lsGet('im_foodLog',[]));
   const [favorites,setFavorites]=useState(()=>lsGet('im_favorites',[]));
-  const [sessions,setSessions]=useState(()=>lsGet('im_sessions',[]));
+  const [sessions,setSessions]=useState(()=>{
+    try {
+      const saved = lsGet('im_sessions',[]);
+      // Ensure sessions is always a valid array
+      return Array.isArray(saved) ? saved : [];
+    } catch { return []; }
+  });
   const [bodyMetrics,setBodyMetrics]=useState(()=>lsGet('im_bodyMetrics',[]));
   const [sleepLog,setSleepLog]=useState(()=>lsGet('im_sleepLog',[]));
   const [customWorkouts,setCustomWorkouts]=useState(()=>lsGet('im_customWorkouts',[]));
@@ -1872,18 +1878,21 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
 
   // Personal records — find max weight per exercise across all sessions
   const personalRecords = (() => {
-    const prs = {};
-    sessions.forEach(s => {
-      s.exercises?.forEach(ex => {
-        ex.sets?.forEach(set => {
-          const w = parseFloat(set.weight);
-          if (!isNaN(w) && w > 0) {
-            if (!prs[ex.name] || w > prs[ex.name]) prs[ex.name] = w;
-          }
+    try {
+      const prs = {};
+      sessions.forEach(s => {
+        (s.exercises||[]).forEach(ex => {
+          if (typeof ex !== 'object' || !ex) return;
+          (ex.sets||[]).forEach(set => {
+            const w = parseFloat(set.weight);
+            if (!isNaN(w) && w > 0) {
+              if (!prs[ex.name] || w > prs[ex.name]) prs[ex.name] = w;
+            }
+          });
         });
       });
-    });
-    return prs;
+      return prs;
+    } catch { return {}; }
   })();
 
   // Check if latest session has any new PRs
@@ -2704,7 +2713,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
           </div>}
 
           {/* Volume chart — extracted to avoid IIFE issues */}
-          <VolumePanelSection sessions={sessions} volumeExercise={volumeExercise} setVolumeExercise={setVolumeExercise}/>
+          {sessions.length >= 2 && <VolumePanelSection sessions={sessions} volumeExercise={volumeExercise} setVolumeExercise={setVolumeExercise}/>}
           <div style={S.labelRed}>Quick Start</div>
           <div style={{ fontSize:12, color:MUTED, marginBottom:10 }}>Pick a template or build your own from scratch.</div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
