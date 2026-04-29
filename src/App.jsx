@@ -1393,11 +1393,23 @@ function AuthScreen({ onAuth }) {
     setTimeout(() => { setMode(m); setPhase("in"); setError(""); }, 300);
   };
 
+  const COMMON_PASSWORDS = ["password","password1","123456","12345678","qwerty","abc123","letmein","welcome","monkey","dragon","master","sunshine","princess","shadow","superman","iloveyou","trustno1","baseball","football","soccer"];
+
+  const validatePassword = (pw) => {
+    if (pw.length < 8) return "Password must be at least 8 characters.";
+    if (!/[A-Z]/.test(pw)) return "Password must include at least one uppercase letter.";
+    if (!/[0-9]/.test(pw)) return "Password must include at least one number.";
+    if (COMMON_PASSWORDS.includes(pw.toLowerCase())) return "That password is too common — please choose a stronger one.";
+    return null;
+  };
+
   const handleSubmit = async () => {
     setError(""); setLoading(true);
     try {
       if (mode === "signup") {
         if (!name.trim()) { setError("Please enter your name."); setLoading(false); return; }
+        const pwError = validatePassword(password);
+        if (pwError) { setError(pwError); setLoading(false); return; }
         const res = await sbSignUp(email, password, name);
         if (res.error) { setError(res.error.message); setLoading(false); return; }
         // After signup, sign in to get session
@@ -1458,6 +1470,30 @@ function AuthScreen({ onAuth }) {
           )}
           <input style={S.input} placeholder="Email address" type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
           <input style={S.input} placeholder="Password" type="password" value={password} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
+          {mode==="signup" && password.length>0 && (()=>{
+            const checks = [
+              password.length >= 8,
+              /[A-Z]/.test(password),
+              /[0-9]/.test(password),
+              !COMMON_PASSWORDS.includes(password.toLowerCase()),
+            ];
+            const score = checks.filter(Boolean).length;
+            const color = score<=1?"#e74c3c":score===2?"#e67e22":score===3?"#f1c40f":RED;
+            const label = score<=1?"Weak":score===2?"Fair":score===3?"Good":"Strong";
+            return (
+              <div style={{ marginTop:6 }}>
+                <div style={{ display:"flex", gap:3, marginBottom:4 }}>
+                  {[0,1,2,3].map(i=>(
+                    <div key={i} style={{ flex:1, height:3, background:i<score?color:"#2a2a2a", borderRadius:2, transition:"background 0.2s" }}/>
+                  ))}
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:color }}>
+                  <span>{label}</span>
+                  <span>{!checks[0]?"8+ chars · "}{!checks[1]?"uppercase · "}{!checks[2]?"number · "}{""}</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {error && <div style={{ fontSize:12, color:RED, marginTop:10, lineHeight:1.5, padding:"8px 12px", background:RED+"11", borderLeft:`2px solid ${RED}` }}>{error}</div>}
@@ -2088,10 +2124,56 @@ function MuscleBodyDiagram({ primary=[], secondary=[] }) {
 
 /* ── EXERCISE ANIMATION ──────────────────────────── */
 function ExerciseAnimation({ exercise }) {
-  const dark = "#1a1a1a", red = RED, muted = "#444", joint = "#2e2e2e";
-  const dur = "1.8s";
+  const [frame, setFrame] = useState(1);
+  const [useImage, setUseImage] = useState(true);
+  const [imgError, setImgError] = useState(false);
+  const TOTAL_FRAMES = 4;
 
-  // Map exercise to animation type
+  // Map exercise name to asset folder slug
+  const ASSET_SLUGS = {
+    "Bench Press":          "bench_press",
+    "Incline Dumbbell Press":"bench_press",
+    "Squat":                "squat",
+    "Front Squat":          "squat",
+    "Hack Squat":           "squat",
+    "Deadlift":             "deadlift",
+    "Romanian Deadlift":    "deadlift",
+    "Sumo Deadlift":        "deadlift",
+    "Pull-Ups":             "pull_ups",
+    "Overhead Press":       "overhead_press",
+    "Bicep Curls":          "bicep_curl",
+    "Hammer Curls":         "bicep_curl",
+    "Barbell Row":          "barbell_row",
+    "Push-Up":              "push_up",
+    "Lunges":               "lunge",
+    "Bulgarian Split Squat":"lunge",
+    "Plank":                "plank",
+    "Calf Raises":          "calves",
+    "Lateral Raises":       "lateral_raise",
+    "Hip Thrust":           "hip_thrust",
+  };
+
+  const slug = ASSET_SLUGS[exercise] || null;
+  const hasAsset = !!slug && !imgError;
+
+  // Frame cycling
+  useEffect(()=>{
+    const timer = setInterval(()=>setFrame(f=>f>=TOTAL_FRAMES?1:f+1), 500);
+    return ()=>clearInterval(timer);
+  },[exercise]);
+
+  // Reset error state on exercise change
+  useEffect(()=>{ setImgError(false); setFrame(1); },[exercise]);
+
+  // SVG fallback logic
+  const dur = "1.8s";
+  const muted = "#444", joint = "#2e2e2e";
+  const Stick = ({x1,y1,x2,y2,color=muted,w=2.5}) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={w} strokeLinecap="round"/>;
+  const Joint = ({cx,cy,r=3.5}) => <circle cx={cx} cy={cy} r={r} fill={joint} stroke={muted} strokeWidth="0.8"/>;
+  const Head  = ({cx,cy}) => <ellipse cx={cx} cy={cy} rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>;
+  const Bar   = ({x1,y1,x2,y2}) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#888" strokeWidth="5" strokeLinecap="round"/>;
+  const Weight= ({cx,cy}) => <rect x={cx-4} y={cy-9} width="8" height="18" rx="2" fill="#555" stroke="#666" strokeWidth="0.5"/>;
+
   const getType = (name) => {
     const n = name.toLowerCase();
     if (n.includes("bench press") || n.includes("incline") || n.includes("chest press") || n.includes("dip")) return "bench";
@@ -2110,340 +2192,49 @@ function ExerciseAnimation({ exercise }) {
     return "generic";
   };
 
-  const type = getType(exercise);
-
-  // Shared body parts
-  const Head  = ({cx,cy}) => <ellipse cx={cx} cy={cy} rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>;
-  const Stick = ({x1,y1,x2,y2,color=muted,w=2.5}) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={w} strokeLinecap="round"/>;
-  const Joint = ({cx,cy,r=3.5}) => <circle cx={cx} cy={cy} r={r} fill={joint} stroke={muted} strokeWidth="0.8"/>;
-  const Bar   = ({x1,y1,x2,y2}) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#888" strokeWidth="5" strokeLinecap="round"/>;
-  const Weight= ({cx,cy}) => <><rect x={cx-4} y={cy-9} width="8" height="18" rx="2" fill="#555" stroke="#666" strokeWidth="0.5"/></>;
-
-  const animations = {
-    bench: (
-      <svg viewBox="0 0 160 120" width="100%" style={{ maxHeight:140 }}>
-        {/* Bench */}
+  const SVGFallback = () => {
+    const type = getType(exercise);
+    const svgs = {
+      bench: (<svg viewBox="0 0 160 120" width="100%" style={{ maxHeight:140 }}>
         <rect x="20" y="82" width="120" height="8" rx="3" fill="#333" stroke="#444" strokeWidth="0.8"/>
-        <rect x="25" y="90" width="8" height="20" rx="2" fill="#2a2a2a" stroke="#444" strokeWidth="0.8"/>
-        <rect x="127" y="90" width="8" height="20" rx="2" fill="#2a2a2a" stroke="#444" strokeWidth="0.8"/>
-        {/* Figure lying — arms animate */}
+        <rect x="25" y="90" width="8" height="20" rx="2" fill="#2a2a2a"/>
+        <rect x="127" y="90" width="8" height="20" rx="2" fill="#2a2a2a"/>
         <g style={{ animation:`exPress ${dur} ease-in-out infinite` }}>
-          {/* Bar + weights */}
-          <Bar x1="30" y1="38" x2="130" y2="38"/>
-          <Weight cx="30" cy="38"/><Weight cx="130" cy="38"/>
+          <Bar x1="30" y1="38" x2="130" y2="38"/><Weight cx="30" cy="38"/><Weight cx="130" cy="38"/>
         </g>
-        {/* Static body */}
         <Head cx="130" cy="68"/>
-        <Stick x1="120" y1="75" x2="60" y2="75" color="#333" w={14}/>  {/* torso box */}
         <rect x="60" y="68" width="60" height="14" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
-        {/* Legs */}
-        <Stick x1="60" y1="75" x2="45" y2="60"/> <Joint cx="45" cy="60"/>
-        <Stick x1="45" y1="60" x2="40" y2="82"/>
-        <Stick x1="60" y1="75" x2="52" y2="60"/> <Joint cx="52" cy="60"/>
-        <Stick x1="52" y1="60" x2="47" y2="82"/>
-        {/* Arms animated */}
+        <Stick x1="60" y1="75" x2="45" y2="60"/><Joint cx="45" cy="60"/><Stick x1="45" y1="60" x2="40" y2="82"/>
+        <Stick x1="60" y1="75" x2="52" y2="60"/><Joint cx="52" cy="60"/><Stick x1="52" y1="60" x2="47" y2="82"/>
         <g style={{ transformOrigin:"110px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
-          <Stick x1="110" y1="72" x2="95" y2="52" color={red}/><Joint cx="95" cy="52" r={4}/>
-          <Stick x1="95" y1="52" x2="80" y2="38" color={red}/>
+          <Stick x1="110" y1="72" x2="95" y2="52" color={RED}/><Joint cx="95" cy="52" r={4}/><Stick x1="95" y1="52" x2="80" y2="38" color={RED}/>
         </g>
         <g style={{ transformOrigin:"75px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
-          <Stick x1="75" y1="72" x2="75" y2="52" color={red}/><Joint cx="75" cy="52" r={4}/>
-          <Stick x1="75" y1="52" x2="80" y2="38" color={red}/>
+          <Stick x1="75" y1="72" x2="75" y2="52" color={RED}/><Joint cx="75" cy="52" r={4}/><Stick x1="75" y1="52" x2="80" y2="38" color={RED}/>
         </g>
-      </svg>
-    ),
-
-    squat: (
-      <svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
+      </svg>),
+      squat: (<svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
         <g style={{ transformOrigin:"60px 80px", animation:`exSquat ${dur} ease-in-out infinite` }}>
-          <Head cx="60" cy="18"/>
-          {/* Bar across shoulders */}
-          <Bar x1="20" y1="38" x2="100" y2="38"/>
-          <Weight cx="20" cy="38"/><Weight cx="100" cy="38"/>
-          {/* Torso */}
-          <Stick x1="60" y1="28" x2="60" y2="65" color={red} w={3}/>
-          {/* Arms */}
-          <Stick x1="60" y1="38" x2="28" y2="38" color={muted}/>
-          <Stick x1="60" y1="38" x2="92" y2="38" color={muted}/>
+          <Head cx="60" cy="18"/><Bar x1="20" y1="38" x2="100" y2="38"/><Weight cx="20" cy="38"/><Weight cx="100" cy="38"/>
+          <Stick x1="60" y1="28" x2="60" y2="65" color={RED} w={3}/>
+          <Stick x1="60" y1="38" x2="28" y2="38" color={muted}/><Stick x1="60" y1="38" x2="92" y2="38" color={muted}/>
           <Joint cx="60" cy="65"/>
         </g>
-        {/* Legs animate with squat */}
         <g style={{ transformOrigin:"60px 65px", animation:`exSquat ${dur} ease-in-out infinite` }}>
-          {/* Upper legs */}
-          <Stick x1="60" y1="65" x2="42" y2="98" color={red}/><Joint cx="42" cy="98"/>
-          <Stick x1="60" y1="65" x2="78" y2="98" color={red}/><Joint cx="78" cy="98"/>
-          {/* Lower legs */}
+          <Stick x1="60" y1="65" x2="42" y2="98" color={RED}/><Joint cx="42" cy="98"/>
           <Stick x1="42" y1="98" x2="38" y2="135"/>
+          <Stick x1="60" y1="65" x2="78" y2="98" color={RED}/><Joint cx="78" cy="98"/>
           <Stick x1="78" y1="98" x2="82" y2="135"/>
-          {/* Feet */}
-          <Stick x1="38" y1="135" x2="28" y2="140" w={3}/>
-          <Stick x1="82" y1="135" x2="92" y2="140" w={3}/>
+          <Stick x1="38" y1="135" x2="28" y2="140" w={3}/><Stick x1="82" y1="135" x2="92" y2="140" w={3}/>
         </g>
-      </svg>
-    ),
-
-    deadlift: (
-      <svg viewBox="0 0 160 150" width="100%" style={{ maxHeight:150 }}>
-        {/* Floor weight */}
-        <Bar x1="25" y1="125" x2="135" y2="125"/>
-        <Weight cx="25" cy="125"/><Weight cx="135" cy="125"/>
-        {/* Hinging body */}
-        <g style={{ transformOrigin:"80px 90px", animation:`exHinge ${dur} ease-in-out infinite` }}>
-          <Head cx="80" cy="20"/>
-          <Stick x1="80" y1="30" x2="80" y2="90" color={red} w={3}/>
-          <Joint cx="80" cy="90"/>
-          {/* Arms hang */}
-          <Stick x1="80" y1="48" x2="60" y2="48" color={muted}/>
-          <Stick x1="80" y1="48" x2="100" y2="48" color={muted}/>
-          <Stick x1="60" y1="48" x2="52" y2="90" color={muted}/><Joint cx="52" cy="90"/>
-          <Stick x1="100" y1="48" x2="108" y2="90" color={muted}/><Joint cx="108" cy="90"/>
-          {/* Forearms to bar */}
-          <Stick x1="52" y1="90" x2="55" y2="118" color={muted}/>
-          <Stick x1="108" y1="90" x2="105" y2="118" color={muted}/>
-        </g>
-        {/* Legs static */}
-        <Stick x1="80" y1="90" x2="65" y2="115"/><Joint cx="65" cy="115"/>
-        <Stick x1="65" y1="115" x2="62" y2="140"/>
-        <Stick x1="80" y1="90" x2="95" y2="115"/><Joint cx="95" cy="115"/>
-        <Stick x1="95" y1="115" x2="98" y2="140"/>
-        <Stick x1="62" y1="140" x2="52" y2="144" w={3}/>
-        <Stick x1="98" y1="140" x2="108" y2="144" w={3}/>
-      </svg>
-    ),
-
-    pullup: (
-      <svg viewBox="0 0 120 170" width="100%" style={{ maxHeight:170 }}>
-        {/* Pull-up bar */}
-        <rect x="10" y="12" width="100" height="8" rx="3" fill="#555" stroke="#666" strokeWidth="0.8"/>
-        <rect x="10" y="4" width="6" height="16" rx="2" fill="#444" stroke="#555" strokeWidth="0.8"/>
-        <rect x="104" y="4" width="6" height="16" rx="2" fill="#444" stroke="#555" strokeWidth="0.8"/>
-        {/* Figure going up/down */}
-        <g style={{ animation:`exPull ${dur} ease-in-out infinite` }}>
-          <Head cx="60" cy="54"/>
-          {/* Arms up to bar */}
-          <Stick x1="60" y1="44" x2="40" y2="20" color={red}/><Joint cx="40" cy="20"/>
-          <Stick x1="40" y1="20" x2="35" y2="15" color={red}/>
-          <Stick x1="60" y1="44" x2="80" y2="20" color={red}/><Joint cx="80" cy="20"/>
-          <Stick x1="80" y1="20" x2="85" y2="15" color={red}/>
-          {/* Torso */}
-          <Stick x1="60" y1="64" x2="60" y2="105" color={muted} w={3}/>
-          <Joint cx="60" cy="105"/>
-          {/* Legs */}
-          <Stick x1="60" y1="105" x2="50" y2="140"/><Joint cx="50" cy="140"/>
-          <Stick x1="50" y1="140" x2="48" y2="160"/>
-          <Stick x1="60" y1="105" x2="70" y2="140"/><Joint cx="70" cy="140"/>
-          <Stick x1="70" y1="140" x2="72" y2="160"/>
-        </g>
-      </svg>
-    ),
-
-    curl: (
-      <svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
-        {/* Standing figure */}
-        <Head cx="60" cy="20"/>
-        <Stick x1="60" y1="30" x2="60" y2="85" color={muted} w={3}/>
-        <Joint cx="60" cy="85"/>
-        {/* Legs */}
-        <Stick x1="60" y1="85" x2="48" y2="125"/><Joint cx="48" cy="125"/>
-        <Stick x1="48" y1="125" x2="45" y2="155"/>
-        <Stick x1="60" y1="85" x2="72" y2="125"/><Joint cx="72" cy="125"/>
-        <Stick x1="72" y1="125" x2="75" y2="155"/>
-        {/* Right arm curling */}
-        <Stick x1="60" y1="50" x2="82" y2="65" color={muted}/>
-        <g style={{ transformOrigin:"82px 65px", animation:`exCurl ${dur} ease-in-out infinite` }}>
-          <Joint cx="82" cy="65"/>
-          <Stick x1="82" y1="65" x2="88" y2="100" color={red}/>
-          <Weight cx="88" cy="102"/>
-        </g>
-        {/* Left arm curling */}
-        <Stick x1="60" y1="50" x2="38" y2="65" color={muted}/>
-        <g style={{ transformOrigin:"38px 65px", animation:`exCurl ${dur} ease-in-out infinite` }}>
-          <Joint cx="38" cy="65"/>
-          <Stick x1="38" y1="65" x2="32" y2="100" color={red}/>
-          <Weight cx="32" cy="102"/>
-        </g>
-      </svg>
-    ),
-
-    ohp: (
-      <svg viewBox="0 0 160 160" width="100%" style={{ maxHeight:160 }}>
-        {/* Bar pressing overhead */}
-        <g style={{ animation:`exPress ${dur} ease-in-out infinite` }}>
-          <Bar x1="20" y1="28" x2="140" y2="28"/>
-          <Weight cx="20" cy="28"/><Weight cx="140" cy="28"/>
-        </g>
-        {/* Standing figure */}
-        <Head cx="80" cy="68"/>
-        <Stick x1="80" y1="78" x2="80" y2="118" color={muted} w={3}/>
-        <Joint cx="80" cy="118"/>
-        <Stick x1="80" y1="118" x2="65" y2="148"/>
-        <Stick x1="80" y1="118" x2="95" y2="148"/>
-        <Stick x1="65" y1="148" x2="58" y2="155" w={3}/>
-        <Stick x1="95" y1="148" x2="102" y2="155" w={3}/>
-        {/* Arms pressing */}
-        <g style={{ transformOrigin:"80px 80px", animation:`exPress ${dur} ease-in-out infinite` }}>
-          <Stick x1="80" y1="80" x2="55" y2="60" color={red}/><Joint cx="55" cy="60"/>
-          <Stick x1="55" y1="60" x2="42" y2="30" color={red}/>
-          <Stick x1="80" y1="80" x2="105" y2="60" color={red}/><Joint cx="105" cy="60"/>
-          <Stick x1="105" y1="60" x2="118" y2="30" color={red}/>
-        </g>
-      </svg>
-    ),
-
-    row: (
-      <svg viewBox="0 0 180 130" width="100%" style={{ maxHeight:130 }}>
-        {/* Bench support */}
-        <rect x="80" y="60" width="60" height="8" rx="3" fill="#333" stroke="#444" strokeWidth="0.8"/>
-        <rect x="82" y="68" width="6" height="30" rx="2" fill="#2a2a2a"/>
-        <rect x="128" y="68" width="6" height="30" rx="2" fill="#2a2a2a"/>
-        {/* Hinged torso */}
-        <Head cx="150" cy="40"/>
-        <Stick x1="140" y1="48" x2="90" y2="62" color={muted} w={3}/>
-        <Joint cx="90" cy="62"/>
-        {/* Support arm */}
-        <Stick x1="90" y1="62" x2="88" y2="95" color={muted}/>
-        {/* Legs */}
-        <Stick x1="90" y1="62" x2="72" y2="90"/><Joint cx="72" cy="90"/>
-        <Stick x1="72" y1="90" x2="68" y2="120"/>
-        {/* Pulling arm */}
-        <Stick x1="140" y1="54" x2="125" y2="60" color={muted}/>
-        <g style={{ transformOrigin:"125px 60px", animation:`exRow ${dur} ease-in-out infinite` }}>
-          <Joint cx="125" cy="60"/>
-          <Stick x1="125" y1="60" x2="90" y2="62" color={red}/>
-          <Weight cx="82" cy="62"/>
-        </g>
-      </svg>
-    ),
-
-    pushup: (
-      <svg viewBox="0 0 200 100" width="100%" style={{ maxHeight:100 }}>
-        <g style={{ animation:`exPushup ${dur} ease-in-out infinite` }}>
-          <Head cx="170" cy="28"/>
-          {/* Body plank */}
-          <rect x="60" y="40" width="100" height="10" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
-          {/* Arms */}
-          <Stick x1="155" y1="44" x2="148" y2="68" color={red}/><Joint cx="148" cy="68" r={4}/>
-          <Stick x1="148" y1="68" x2="145" y2="82"/>
-          <Stick x1="120" y1="44" x2="115" y2="68" color={red}/><Joint cx="115" cy="68" r={4}/>
-          <Stick x1="115" y1="68" x2="112" y2="82"/>
-          {/* Legs */}
-          <Stick x1="60" y1="48" x2="52" y2="78"/>
-          <Stick x1="68" y1="48" x2="60" y2="78"/>
-        </g>
-        {/* Floor */}
-        <line x1="20" y1="85" x2="180" y2="85" stroke="#333" strokeWidth="1.5"/>
-      </svg>
-    ),
-
-    lunge: (
-      <svg viewBox="0 0 160 170" width="100%" style={{ maxHeight:170 }}>
-        <Head cx="80" cy="20"/>
-        <Stick x1="80" y1="30" x2="80" y2="80" color={muted} w={3}/>
-        <Joint cx="80" cy="80"/>
-        {/* Arms out for balance */}
-        <Stick x1="80" y1="55" x2="50" y2="65" color={muted}/>
-        <Stick x1="80" y1="55" x2="110" y2="65" color={muted}/>
-        <g style={{ transformOrigin:"80px 80px", animation:`exLunge ${dur} ease-in-out infinite` }}>
-          {/* Front leg */}
-          <Stick x1="80" y1="80" x2="58" y2="118" color={red}/><Joint cx="58" cy="118"/>
-          <Stick x1="58" y1="118" x2="52" y2="155"/>
-          {/* Back leg */}
-          <Stick x1="80" y1="80" x2="102" y2="115" color={muted}/><Joint cx="102" cy="115"/>
-          <Stick x1="102" y1="115" x2="110" y2="140"/>
-          {/* Feet */}
-          <Stick x1="52" y1="155" x2="40" y2="158" w={3}/>
-          <Stick x1="110" y1="140" x2="120" y2="143" w={3}/>
-        </g>
-      </svg>
-    ),
-
-    plank: (
-      <svg viewBox="0 0 200 100" width="100%" style={{ maxHeight:100 }}>
-        <g style={{ animation:`exPlank ${dur} ease-in-out infinite` }}>
-          <Head cx="165" cy="32"/>
-          <rect x="58" y="46" width="100" height="10" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
-          {/* Forearms on floor */}
-          <Stick x1="148" y1="50" x2="140" y2="76" color={red}/>
-          <Stick x1="115" y1="50" x2="108" y2="76" color={red}/>
-          {/* Legs */}
-          <Stick x1="58" y1="50" x2="50" y2="76"/>
-          <Stick x1="66" y1="50" x2="58" y2="76"/>
-        </g>
-        <line x1="20" y1="78" x2="180" y2="78" stroke="#333" strokeWidth="1.5"/>
-      </svg>
-    ),
-
-    calves: (
-      <svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
-        <Head cx="60" cy="20"/>
-        <Stick x1="60" y1="30" x2="60" y2="85" color={muted} w={3}/>
-        <Stick x1="60" y1="55" x2="40" y2="70" color={muted}/>
-        <Stick x1="60" y1="55" x2="80" y2="70" color={muted}/>
-        <Joint cx="60" cy="85"/>
-        <Stick x1="60" y1="85" x2="48" y2="122"/><Joint cx="48" cy="122"/>
-        <Stick x1="60" y1="85" x2="72" y2="122"/><Joint cx="72" cy="122"/>
-        <g style={{ transformOrigin:"60px 122px", animation:`exCalves 1.2s ease-in-out infinite` }}>
-          <Stick x1="48" y1="122" x2="45" y2="150" color={red}/>
-          <Stick x1="72" y1="122" x2="75" y2="150" color={red}/>
-          <Stick x1="45" y1="150" x2="35" y2="154" w={3} color={red}/>
-          <Stick x1="75" y1="150" x2="85" y2="154" w={3} color={red}/>
-        </g>
-      </svg>
-    ),
-
-    fly: (
-      <svg viewBox="0 0 180 140" width="100%" style={{ maxHeight:140 }}>
-        {/* Bench */}
-        <rect x="30" y="78" width="120" height="8" rx="3" fill="#333" stroke="#444" strokeWidth="0.8"/>
-        <rect x="36" y="86" width="6" height="24" rx="2" fill="#2a2a2a"/>
-        <rect x="138" y="86" width="6" height="24" rx="2" fill="#2a2a2a"/>
-        <Head cx="148" cy="60"/>
-        <rect x="56" y="64" width="88" height="14" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
-        <Stick x1="56" y1="64" x2="40" y2="58"/><Joint cx="40" cy="58"/>
-        <Stick x1="144" y1="64" x2="160" y2="58"/><Joint cx="160" cy="58"/>
-        {/* Flying arms */}
-        <g style={{ transformOrigin:"56px 68px", animation:`exFly ${dur} ease-in-out infinite` }}>
-          <Stick x1="56" y1="68" x2="30" y2="52" color={red}/>
-          <Weight cx="24" cy="48"/>
-        </g>
-        <g style={{ transformOrigin:"144px 68px", animation:`exFly ${dur} ease-in-out infinite` }}>
-          <Stick x1="144" y1="68" x2="170" y2="52" color={red}/>
-          <Weight cx="174" cy="48"/>
-        </g>
-      </svg>
-    ),
-
-    hipthrust: (
-      <svg viewBox="0 0 200 130" width="100%" style={{ maxHeight:130 }}>
-        {/* Bench back support */}
-        <rect x="120" y="40" width="50" height="50" rx="4" fill="#222" stroke="#333" strokeWidth="0.8"/>
-        {/* Bar on hips */}
-        <Bar x1="40" y1="62" x2="130" y2="62"/>
-        <Weight cx="40" cy="62"/><Weight cx="130" cy="62"/>
-        {/* Figure thrusting */}
-        <g style={{ transformOrigin:"100px 75px", animation:`exSquat ${dur} ease-in-out infinite` }}>
-          <Head cx="152" cy="48"/>
-          {/* Torso */}
-          <Stick x1="140" y1="56" x2="90" y2="62" color={muted} w={3}/>
-          <Joint cx="90" cy="62"/>
-          {/* Upper legs */}
-          <Stick x1="90" y1="62" x2="72" y2="95" color={red}/><Joint cx="72" cy="95"/>
-          <Stick x1="90" y1="62" x2="82" y2="95" color={red}/><Joint cx="82" cy="95"/>
-          {/* Lower legs */}
-          <Stick x1="72" y1="95" x2="68" y2="125"/>
-          <Stick x1="82" y1="95" x2="78" y2="125"/>
-        </g>
-      </svg>
-    ),
-
-    generic: (
-      <svg viewBox="0 0 120 170" width="100%" style={{ maxHeight:170 }}>
+      </svg>),
+      generic: (<svg viewBox="0 0 120 170" width="100%" style={{ maxHeight:170 }}>
         <g style={{ animation:`exPress 2s ease-in-out infinite` }}>
           <Head cx="60" cy="22"/>
           <Stick x1="60" y1="32" x2="60" y2="88" color={muted} w={3}/>
-          <Stick x1="60" y1="50" x2="36" y2="68" color={red}/><Joint cx="36" cy="68"/>
+          <Stick x1="60" y1="50" x2="36" y2="68" color={RED}/><Joint cx="36" cy="68"/>
           <Stick x1="36" y1="68" x2="28" y2="52"/>
-          <Stick x1="60" y1="50" x2="84" y2="68" color={red}/><Joint cx="84" cy="68"/>
+          <Stick x1="60" y1="50" x2="84" y2="68" color={RED}/><Joint cx="84" cy="68"/>
           <Stick x1="84" y1="68" x2="92" y2="52"/>
           <Joint cx="60" cy="88"/>
           <Stick x1="60" y1="88" x2="46" y2="128"/><Joint cx="46" cy="128"/>
@@ -2453,20 +2244,42 @@ function ExerciseAnimation({ exercise }) {
           <Stick x1="42" y1="160" x2="32" y2="164" w={3}/>
           <Stick x1="78" y1="160" x2="88" y2="164" w={3}/>
         </g>
-      </svg>
-    ),
+      </svg>),
+    };
+    return svgs[type] || svgs.generic;
   };
 
   return (
-    <div style={{ background:"#0d0d0d", padding:"16px 12px", marginBottom:14, borderLeft:`3px solid ${RED}`, position:"relative" }}>
-      <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:8 }}>
-        ▶ MOVEMENT DEMO
+    <div style={{ background:"#0d0d0d", padding:"16px 12px", marginBottom:14, borderLeft:`3px solid ${RED}` }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+        <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2 }}>▶ MOVEMENT DEMO</div>
+        {hasAsset && (
+          <div style={{ display:"flex", gap:3 }}>
+            {[1,2,3,4].map(f=>(
+              <div key={f} style={{ width:6, height:6, borderRadius:"50%", background:frame===f?RED:"#333", transition:"background 0.2s" }}/>
+            ))}
+          </div>
+        )}
       </div>
-      <div style={{ display:"flex", justifyContent:"center" }}>
-        {animations[type] || animations.generic}
-      </div>
+
+      {hasAsset ? (
+        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", minHeight:200, position:"relative" }}>
+          <img
+            key={`${slug}-${frame}`}
+            src={`/exercises/${slug}/frame_0${frame}.png`}
+            alt={`${exercise} frame ${frame}`}
+            onError={()=>setImgError(true)}
+            style={{ maxWidth:"100%", maxHeight:220, width:"auto", height:"auto", objectFit:"contain", display:"block" }}
+          />
+        </div>
+      ) : (
+        <div style={{ display:"flex", justifyContent:"center" }}>
+          <SVGFallback/>
+        </div>
+      )}
+
       <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:6, letterSpacing:1 }}>
-        Simplified demo — focus on form tips below
+        {hasAsset ? `Frame ${frame} of ${TOTAL_FRAMES}` : "Simplified demo — focus on form tips below"}
       </div>
     </div>
   );
