@@ -1489,7 +1489,7 @@ function AuthScreen({ onAuth }) {
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:color }}>
                   <span>{label}</span>
-                  <span>{!checks[0]?"8+ chars · "}{!checks[1]?"uppercase · "}{!checks[2]?"number · "}{""}</span>
+                  <span>{[!checks[0]?"8+ chars":null, !checks[1]?"uppercase":null, !checks[2]?"number":null].filter(Boolean).join(" · ")}</span>
                 </div>
               </div>
             );
