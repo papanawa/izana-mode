@@ -2125,138 +2125,163 @@ function MuscleBodyDiagram({ primary=[], secondary=[] }) {
 /* ── EXERCISE ANIMATION ──────────────────────────── */
 function ExerciseAnimation({ exercise }) {
   const [frame, setFrame] = useState(1);
-  const [useImage, setUseImage] = useState(true);
   const [imgError, setImgError] = useState(false);
   const TOTAL_FRAMES = 4;
 
-  // Map exercise name to asset folder slug
   const ASSET_SLUGS = {
-    "Bench Press":          "bench_press",
-    "Incline Dumbbell Press":"bench_press",
-    "Squat":                "squat",
-    "Front Squat":          "squat",
-    "Hack Squat":           "squat",
-    "Deadlift":             "deadlift",
-    "Romanian Deadlift":    "deadlift",
-    "Sumo Deadlift":        "deadlift",
-    "Pull-Ups":             "pull_ups",
-    "Overhead Press":       "overhead_press",
-    "Bicep Curls":          "bicep_curl",
-    "Hammer Curls":         "bicep_curl",
-    "Barbell Row":          "barbell_row",
-    "Push-Up":              "push_up",
-    "Lunges":               "lunge",
-    "Bulgarian Split Squat":"lunge",
-    "Plank":                "plank",
-    "Calf Raises":          "calves",
-    "Lateral Raises":       "lateral_raise",
-    "Hip Thrust":           "hip_thrust",
+    "Bench Press":"bench_press","Incline Dumbbell Press":"bench_press",
+    "Squat":"squat","Front Squat":"squat","Hack Squat":"squat",
+    "Deadlift":"deadlift","Romanian Deadlift":"deadlift","Sumo Deadlift":"deadlift",
+    "Pull-Ups":"pull_ups","Overhead Press":"overhead_press",
+    "Bicep Curls":"bicep_curl","Hammer Curls":"bicep_curl",
+    "Barbell Row":"barbell_row","Push-Up":"push_up","Lunges":"lunge",
+    "Bulgarian Split Squat":"lunge","Plank":"plank","Calf Raises":"calves",
+    "Lateral Raises":"lateral_raise","Hip Thrust":"hip_thrust",
   };
 
   const slug = ASSET_SLUGS[exercise] || null;
   const hasAsset = !!slug && !imgError;
 
-  // Frame cycling
   useEffect(()=>{
     const timer = setInterval(()=>setFrame(f=>f>=TOTAL_FRAMES?1:f+1), 500);
     return ()=>clearInterval(timer);
   },[exercise]);
 
-  // Reset error state on exercise change
   useEffect(()=>{ setImgError(false); setFrame(1); },[exercise]);
 
-  // SVG fallback logic
+  // Determine SVG type without nested components
+  const n = exercise.toLowerCase();
+  const isBench   = n.includes("bench press")||n.includes("incline")||n.includes("chest press")||n.includes("dip");
+  const isSquat   = n.includes("squat")||n.includes("leg press");
+  const isDead    = n.includes("deadlift")||n.includes("romanian");
+  const isPullup  = n.includes("pull-up")||n.includes("pullup")||n.includes("chin");
+  const isCurl    = n.includes("curl")||n.includes("bicep");
+  const isRow     = n.includes("row");
+  const isPushup  = n.includes("push-up")||n.includes("pushup");
+  const isLunge   = n.includes("lunge")||n.includes("split squat");
+  const isPlank   = n.includes("plank")||n.includes("crunch")||n.includes("abs");
+  const isCalves  = n.includes("calf")||n.includes("calves");
+  const isOHP     = n.includes("overhead")||n.includes("shoulder press");
+
   const dur = "1.8s";
-  const muted = "#444", joint = "#2e2e2e";
-  const Stick = ({x1,y1,x2,y2,color=muted,w=2.5}) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={w} strokeLinecap="round"/>;
-  const Joint = ({cx,cy,r=3.5}) => <circle cx={cx} cy={cy} r={r} fill={joint} stroke={muted} strokeWidth="0.8"/>;
-  const Head  = ({cx,cy}) => <ellipse cx={cx} cy={cy} rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>;
-  const Bar   = ({x1,y1,x2,y2}) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#888" strokeWidth="5" strokeLinecap="round"/>;
-  const Weight= ({cx,cy}) => <rect x={cx-4} y={cy-9} width="8" height="18" rx="2" fill="#555" stroke="#666" strokeWidth="0.5"/>;
+  const m = "#444"; // muted
+  const j = "#2e2e2e"; // joint
 
-  const getType = (name) => {
-    const n = name.toLowerCase();
-    if (n.includes("bench press") || n.includes("incline") || n.includes("chest press") || n.includes("dip")) return "bench";
-    if (n.includes("overhead press") || n.includes("shoulder press") || n.includes("military")) return "ohp";
-    if (n.includes("squat") || n.includes("leg press") || n.includes("hack squat")) return "squat";
-    if (n.includes("deadlift") || n.includes("romanian") || n.includes("rdl")) return "deadlift";
-    if (n.includes("pull-up") || n.includes("pullup") || n.includes("chin-up") || n.includes("lat pulldown")) return "pullup";
-    if (n.includes("curl") || n.includes("bicep")) return "curl";
-    if (n.includes("row") || n.includes("pull")) return "row";
-    if (n.includes("push-up") || n.includes("pushup")) return "pushup";
-    if (n.includes("lunge") || n.includes("split squat") || n.includes("step-up")) return "lunge";
-    if (n.includes("plank") || n.includes("crunch") || n.includes("sit-up") || n.includes("abs")) return "plank";
-    if (n.includes("calf") || n.includes("calves")) return "calves";
-    if (n.includes("lateral raise") || n.includes("fly")) return "fly";
-    if (n.includes("hip thrust") || n.includes("glute")) return "hipthrust";
-    return "generic";
-  };
-
-  const type = getType(exercise);
-  const svgFallback = type === "bench" ? (
+  const svgFallback = isSquat ? (
+    <svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
+      <g style={{ transformOrigin:"60px 80px", animation:`exSquat ${dur} ease-in-out infinite` }}>
+        <ellipse cx="60" cy="18" rx="10" ry="11" fill="#2a2a2a" stroke={m} strokeWidth="0.8"/>
+        <line x1="20" y1="38" x2="100" y2="38" stroke="#888" strokeWidth="5" strokeLinecap="round"/>
+        <rect x="16" y="29" width="8" height="18" rx="2" fill="#555"/>
+        <rect x="96" y="29" width="8" height="18" rx="2" fill="#555"/>
+        <line x1="60" y1="28" x2="60" y2="65" stroke={RED} strokeWidth="3" strokeLinecap="round"/>
+        <line x1="60" y1="38" x2="28" y2="38" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="38" x2="92" y2="38" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="60" cy="65" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+      </g>
+      <g style={{ transformOrigin:"60px 65px", animation:`exSquat ${dur} ease-in-out infinite` }}>
+        <line x1="60" y1="65" x2="42" y2="98" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="42" cy="98" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="42" y1="98" x2="38" y2="135" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="65" x2="78" y2="98" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="78" cy="98" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="78" y1="98" x2="82" y2="135" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="38" y1="135" x2="28" y2="140" stroke={m} strokeWidth="3" strokeLinecap="round"/>
+        <line x1="82" y1="135" x2="92" y2="140" stroke={m} strokeWidth="3" strokeLinecap="round"/>
+      </g>
+    </svg>
+  ) : isDead ? (
+    <svg viewBox="0 0 160 150" width="100%" style={{ maxHeight:150 }}>
+      <line x1="25" y1="125" x2="135" y2="125" stroke="#888" strokeWidth="5" strokeLinecap="round"/>
+      <rect x="21" y="116" width="8" height="18" rx="2" fill="#555"/>
+      <rect x="131" y="116" width="8" height="18" rx="2" fill="#555"/>
+      <g style={{ transformOrigin:"80px 90px", animation:`exHinge ${dur} ease-in-out infinite` }}>
+        <ellipse cx="80" cy="20" rx="10" ry="11" fill="#2a2a2a" stroke={m} strokeWidth="0.8"/>
+        <line x1="80" y1="30" x2="80" y2="90" stroke={RED} strokeWidth="3" strokeLinecap="round"/>
+        <circle cx="80" cy="90" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="80" y1="48" x2="55" y2="48" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="80" y1="48" x2="105" y2="48" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="55" y1="48" x2="48" y2="90" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="48" cy="90" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="105" y1="48" x2="112" y2="90" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="112" cy="90" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="48" y1="90" x2="51" y2="118" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="112" y1="90" x2="109" y2="118" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+      </g>
+      <line x1="80" y1="90" x2="65" y2="115" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+      <circle cx="65" cy="115" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+      <line x1="65" y1="115" x2="62" y2="140" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="80" y1="90" x2="95" y2="115" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+      <circle cx="95" cy="115" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+      <line x1="95" y1="115" x2="98" y2="140" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+    </svg>
+  ) : isPullup ? (
+    <svg viewBox="0 0 120 170" width="100%" style={{ maxHeight:170 }}>
+      <rect x="10" y="12" width="100" height="8" rx="3" fill="#555" stroke="#666" strokeWidth="0.8"/>
+      <g style={{ animation:`exPull ${dur} ease-in-out infinite` }}>
+        <ellipse cx="60" cy="54" rx="10" ry="11" fill="#2a2a2a" stroke={m} strokeWidth="0.8"/>
+        <line x1="60" y1="44" x2="40" y2="20" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="40" cy="20" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="40" y1="20" x2="35" y2="15" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="44" x2="80" y2="20" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="80" cy="20" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="80" y1="20" x2="85" y2="15" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="64" x2="60" y2="105" stroke={m} strokeWidth="3" strokeLinecap="round"/>
+        <circle cx="60" cy="105" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="60" y1="105" x2="50" y2="140" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="50" cy="140" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="50" y1="140" x2="48" y2="160" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="105" x2="70" y2="140" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="70" cy="140" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="70" y1="140" x2="72" y2="160" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+      </g>
+    </svg>
+  ) : isBench ? (
     <svg viewBox="0 0 160 120" width="100%" style={{ maxHeight:140 }}>
       <rect x="20" y="82" width="120" height="8" rx="3" fill="#333" stroke="#444" strokeWidth="0.8"/>
       <rect x="25" y="90" width="8" height="20" rx="2" fill="#2a2a2a"/>
       <rect x="127" y="90" width="8" height="20" rx="2" fill="#2a2a2a"/>
       <g style={{ animation:`exPress ${dur} ease-in-out infinite` }}>
         <line x1="30" y1="38" x2="130" y2="38" stroke="#888" strokeWidth="5" strokeLinecap="round"/>
-        <rect x="26" y="29" width="8" height="18" rx="2" fill="#555"/><rect x="126" y="29" width="8" height="18" rx="2" fill="#555"/>
+        <rect x="26" y="29" width="8" height="18" rx="2" fill="#555"/>
+        <rect x="126" y="29" width="8" height="18" rx="2" fill="#555"/>
       </g>
-      <ellipse cx="130" cy="68" rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>
-      <rect x="60" y="68" width="60" height="14" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
+      <ellipse cx="130" cy="68" rx="10" ry="11" fill="#2a2a2a" stroke={m} strokeWidth="0.8"/>
+      <rect x="60" y="68" width="60" height="14" rx="4" fill="#222" stroke={m} strokeWidth="0.7"/>
+      <line x1="60" y1="75" x2="45" y2="60" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+      <circle cx="45" cy="60" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+      <line x1="45" y1="60" x2="40" y2="82" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
       <g style={{ transformOrigin:"110px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
         <line x1="110" y1="72" x2="95" y2="52" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="95" cy="52" r="4" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <circle cx="95" cy="52" r="4" fill={j} stroke={m} strokeWidth="0.8"/>
         <line x1="95" y1="52" x2="80" y2="38" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
       </g>
       <g style={{ transformOrigin:"75px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
         <line x1="75" y1="72" x2="75" y2="52" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="75" cy="52" r="4" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <circle cx="75" cy="52" r="4" fill={j} stroke={m} strokeWidth="0.8"/>
         <line x1="75" y1="52" x2="80" y2="38" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
-      </g>
-    </svg>
-  ) : type === "squat" ? (
-    <svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
-      <g style={{ transformOrigin:"60px 80px", animation:`exSquat ${dur} ease-in-out infinite` }}>
-        <ellipse cx="60" cy="18" rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>
-        <line x1="20" y1="38" x2="100" y2="38" stroke="#888" strokeWidth="5" strokeLinecap="round"/>
-        <rect x="16" y="29" width="8" height="18" rx="2" fill="#555"/><rect x="96" y="29" width="8" height="18" rx="2" fill="#555"/>
-        <line x1="60" y1="28" x2="60" y2="65" stroke={RED} strokeWidth="3" strokeLinecap="round"/>
-        <line x1="60" y1="38" x2="28" y2="38" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
-        <line x1="60" y1="38" x2="92" y2="38" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="60" cy="65" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
-      </g>
-      <g style={{ transformOrigin:"60px 65px", animation:`exSquat ${dur} ease-in-out infinite` }}>
-        <line x1="60" y1="65" x2="42" y2="98" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="42" cy="98" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
-        <line x1="42" y1="98" x2="38" y2="135" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
-        <line x1="60" y1="65" x2="78" y2="98" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="78" cy="98" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
-        <line x1="78" y1="98" x2="82" y2="135" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
-        <line x1="38" y1="135" x2="28" y2="140" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
-        <line x1="82" y1="135" x2="92" y2="140" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
       </g>
     </svg>
   ) : (
     <svg viewBox="0 0 120 170" width="100%" style={{ maxHeight:170 }}>
       <g style={{ animation:`exPress 2s ease-in-out infinite` }}>
-        <ellipse cx="60" cy="22" rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>
-        <line x1="60" y1="32" x2="60" y2="88" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
+        <ellipse cx="60" cy="22" rx="10" ry="11" fill="#2a2a2a" stroke={m} strokeWidth="0.8"/>
+        <line x1="60" y1="32" x2="60" y2="88" stroke={m} strokeWidth="3" strokeLinecap="round"/>
         <line x1="60" y1="50" x2="36" y2="68" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="36" cy="68" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
-        <line x1="36" y1="68" x2="28" y2="52" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="36" cy="68" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="36" y1="68" x2="28" y2="52" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
         <line x1="60" y1="50" x2="84" y2="68" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="84" cy="68" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
-        <line x1="84" y1="68" x2="92" y2="52" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="60" cy="88" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
-        <line x1="60" y1="88" x2="46" y2="128" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="46" cy="128" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
-        <line x1="46" y1="128" x2="42" y2="160" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
-        <line x1="60" y1="88" x2="74" y2="128" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
-        <circle cx="74" cy="128" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
-        <line x1="74" y1="128" x2="78" y2="160" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
-        <line x1="42" y1="160" x2="32" y2="164" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
-        <line x1="78" y1="160" x2="88" y2="164" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
+        <circle cx="84" cy="68" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="84" y1="68" x2="92" y2="52" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="60" cy="88" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="60" y1="88" x2="46" y2="128" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="46" cy="128" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="46" y1="128" x2="42" y2="160" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="88" x2="74" y2="128" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="74" cy="128" r="3.5" fill={j} stroke={m} strokeWidth="0.8"/>
+        <line x1="74" y1="128" x2="78" y2="160" stroke={m} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="42" y1="160" x2="32" y2="164" stroke={m} strokeWidth="3" strokeLinecap="round"/>
+        <line x1="78" y1="160" x2="88" y2="164" stroke={m} strokeWidth="3" strokeLinecap="round"/>
       </g>
     </svg>
   );
@@ -2273,11 +2298,9 @@ function ExerciseAnimation({ exercise }) {
           </div>
         )}
       </div>
-
       {hasAsset ? (
-        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", minHeight:200, position:"relative" }}>
+        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", minHeight:200 }}>
           <img
-            key={`${slug}-${frame}`}
             src={`/exercises/${slug}/frame_0${frame}.png`}
             alt={`${exercise} frame ${frame}`}
             onError={()=>setImgError(true)}
@@ -2289,7 +2312,6 @@ function ExerciseAnimation({ exercise }) {
           {svgFallback}
         </div>
       )}
-
       <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:6, letterSpacing:1 }}>
         {hasAsset ? `Frame ${frame} of ${TOTAL_FRAMES}` : "Simplified demo — focus on form tips below"}
       </div>
