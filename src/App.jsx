@@ -103,6 +103,17 @@ const ANIM = `
   .ob-input:focus{border-bottom-color:#C41E2A !important; caret-color:#C41E2A; outline:none;}
   .ob-input::placeholder{color:#aaa;}
   .ob-input{caret-color:#C41E2A;}
+  @keyframes exPress{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
+  @keyframes exSquat{0%,100%{transform:translateY(0)}50%{transform:translateY(22px)}}
+  @keyframes exHinge{0%,100%{transform:rotate(0deg)}50%{transform:rotate(55deg)}}
+  @keyframes exPull{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}
+  @keyframes exCurl{0%,100%{transform:rotate(0deg)}50%{transform:rotate(-80deg)}}
+  @keyframes exRow{0%,100%{transform:translateX(0)}50%{transform:translateX(-16px)}}
+  @keyframes exPlank{0%,100%{transform:scaleX(1)}50%{transform:scaleX(0.97)}}
+  @keyframes exLunge{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(12px) rotate(8deg)}}
+  @keyframes exFly{0%,100%{transform:rotate(0deg)}50%{transform:rotate(30deg)}}
+  @keyframes exCalves{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  @keyframes exPushup{0%,100%{transform:translateY(0)}50%{transform:translateY(14px)}}
 `;
 
 function YinYang({ size=32, style={}, className="" }) {
@@ -2075,6 +2086,392 @@ function MuscleBodyDiagram({ primary=[], secondary=[] }) {
   );
 }
 
+/* ── EXERCISE ANIMATION ──────────────────────────── */
+function ExerciseAnimation({ exercise }) {
+  const dark = "#1a1a1a", red = RED, muted = "#444", joint = "#2e2e2e";
+  const dur = "1.8s";
+
+  // Map exercise to animation type
+  const getType = (name) => {
+    const n = name.toLowerCase();
+    if (n.includes("bench press") || n.includes("incline") || n.includes("chest press") || n.includes("dip")) return "bench";
+    if (n.includes("overhead press") || n.includes("shoulder press") || n.includes("military")) return "ohp";
+    if (n.includes("squat") || n.includes("leg press") || n.includes("hack squat")) return "squat";
+    if (n.includes("deadlift") || n.includes("romanian") || n.includes("rdl")) return "deadlift";
+    if (n.includes("pull-up") || n.includes("pullup") || n.includes("chin-up") || n.includes("lat pulldown")) return "pullup";
+    if (n.includes("curl") || n.includes("bicep")) return "curl";
+    if (n.includes("row") || n.includes("pull")) return "row";
+    if (n.includes("push-up") || n.includes("pushup")) return "pushup";
+    if (n.includes("lunge") || n.includes("split squat") || n.includes("step-up")) return "lunge";
+    if (n.includes("plank") || n.includes("crunch") || n.includes("sit-up") || n.includes("abs")) return "plank";
+    if (n.includes("calf") || n.includes("calves")) return "calves";
+    if (n.includes("lateral raise") || n.includes("fly")) return "fly";
+    if (n.includes("hip thrust") || n.includes("glute")) return "hipthrust";
+    return "generic";
+  };
+
+  const type = getType(exercise);
+
+  // Shared body parts
+  const Head  = ({cx,cy}) => <ellipse cx={cx} cy={cy} rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>;
+  const Stick = ({x1,y1,x2,y2,color=muted,w=2.5}) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={w} strokeLinecap="round"/>;
+  const Joint = ({cx,cy,r=3.5}) => <circle cx={cx} cy={cy} r={r} fill={joint} stroke={muted} strokeWidth="0.8"/>;
+  const Bar   = ({x1,y1,x2,y2}) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#888" strokeWidth="5" strokeLinecap="round"/>;
+  const Weight= ({cx,cy}) => <><rect x={cx-4} y={cy-9} width="8" height="18" rx="2" fill="#555" stroke="#666" strokeWidth="0.5"/></>;
+
+  const animations = {
+    bench: (
+      <svg viewBox="0 0 160 120" width="100%" style={{ maxHeight:140 }}>
+        {/* Bench */}
+        <rect x="20" y="82" width="120" height="8" rx="3" fill="#333" stroke="#444" strokeWidth="0.8"/>
+        <rect x="25" y="90" width="8" height="20" rx="2" fill="#2a2a2a" stroke="#444" strokeWidth="0.8"/>
+        <rect x="127" y="90" width="8" height="20" rx="2" fill="#2a2a2a" stroke="#444" strokeWidth="0.8"/>
+        {/* Figure lying — arms animate */}
+        <g style={{ animation:`exPress ${dur} ease-in-out infinite` }}>
+          {/* Bar + weights */}
+          <Bar x1="30" y1="38" x2="130" y2="38"/>
+          <Weight cx="30" cy="38"/><Weight cx="130" cy="38"/>
+        </g>
+        {/* Static body */}
+        <Head cx="130" cy="68"/>
+        <Stick x1="120" y1="75" x2="60" y2="75" color="#333" w={14}/>  {/* torso box */}
+        <rect x="60" y="68" width="60" height="14" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
+        {/* Legs */}
+        <Stick x1="60" y1="75" x2="45" y2="60"/> <Joint cx="45" cy="60"/>
+        <Stick x1="45" y1="60" x2="40" y2="82"/>
+        <Stick x1="60" y1="75" x2="52" y2="60"/> <Joint cx="52" cy="60"/>
+        <Stick x1="52" y1="60" x2="47" y2="82"/>
+        {/* Arms animated */}
+        <g style={{ transformOrigin:"110px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
+          <Stick x1="110" y1="72" x2="95" y2="52" color={red}/><Joint cx="95" cy="52" r={4}/>
+          <Stick x1="95" y1="52" x2="80" y2="38" color={red}/>
+        </g>
+        <g style={{ transformOrigin:"75px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
+          <Stick x1="75" y1="72" x2="75" y2="52" color={red}/><Joint cx="75" cy="52" r={4}/>
+          <Stick x1="75" y1="52" x2="80" y2="38" color={red}/>
+        </g>
+      </svg>
+    ),
+
+    squat: (
+      <svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
+        <g style={{ transformOrigin:"60px 80px", animation:`exSquat ${dur} ease-in-out infinite` }}>
+          <Head cx="60" cy="18"/>
+          {/* Bar across shoulders */}
+          <Bar x1="20" y1="38" x2="100" y2="38"/>
+          <Weight cx="20" cy="38"/><Weight cx="100" cy="38"/>
+          {/* Torso */}
+          <Stick x1="60" y1="28" x2="60" y2="65" color={red} w={3}/>
+          {/* Arms */}
+          <Stick x1="60" y1="38" x2="28" y2="38" color={muted}/>
+          <Stick x1="60" y1="38" x2="92" y2="38" color={muted}/>
+          <Joint cx="60" cy="65"/>
+        </g>
+        {/* Legs animate with squat */}
+        <g style={{ transformOrigin:"60px 65px", animation:`exSquat ${dur} ease-in-out infinite` }}>
+          {/* Upper legs */}
+          <Stick x1="60" y1="65" x2="42" y2="98" color={red}/><Joint cx="42" cy="98"/>
+          <Stick x1="60" y1="65" x2="78" y2="98" color={red}/><Joint cx="78" cy="98"/>
+          {/* Lower legs */}
+          <Stick x1="42" y1="98" x2="38" y2="135"/>
+          <Stick x1="78" y1="98" x2="82" y2="135"/>
+          {/* Feet */}
+          <Stick x1="38" y1="135" x2="28" y2="140" w={3}/>
+          <Stick x1="82" y1="135" x2="92" y2="140" w={3}/>
+        </g>
+      </svg>
+    ),
+
+    deadlift: (
+      <svg viewBox="0 0 160 150" width="100%" style={{ maxHeight:150 }}>
+        {/* Floor weight */}
+        <Bar x1="25" y1="125" x2="135" y2="125"/>
+        <Weight cx="25" cy="125"/><Weight cx="135" cy="125"/>
+        {/* Hinging body */}
+        <g style={{ transformOrigin:"80px 90px", animation:`exHinge ${dur} ease-in-out infinite` }}>
+          <Head cx="80" cy="20"/>
+          <Stick x1="80" y1="30" x2="80" y2="90" color={red} w={3}/>
+          <Joint cx="80" cy="90"/>
+          {/* Arms hang */}
+          <Stick x1="80" y1="48" x2="60" y2="48" color={muted}/>
+          <Stick x1="80" y1="48" x2="100" y2="48" color={muted}/>
+          <Stick x1="60" y1="48" x2="52" y2="90" color={muted}/><Joint cx="52" cy="90"/>
+          <Stick x1="100" y1="48" x2="108" y2="90" color={muted}/><Joint cx="108" cy="90"/>
+          {/* Forearms to bar */}
+          <Stick x1="52" y1="90" x2="55" y2="118" color={muted}/>
+          <Stick x1="108" y1="90" x2="105" y2="118" color={muted}/>
+        </g>
+        {/* Legs static */}
+        <Stick x1="80" y1="90" x2="65" y2="115"/><Joint cx="65" cy="115"/>
+        <Stick x1="65" y1="115" x2="62" y2="140"/>
+        <Stick x1="80" y1="90" x2="95" y2="115"/><Joint cx="95" cy="115"/>
+        <Stick x1="95" y1="115" x2="98" y2="140"/>
+        <Stick x1="62" y1="140" x2="52" y2="144" w={3}/>
+        <Stick x1="98" y1="140" x2="108" y2="144" w={3}/>
+      </svg>
+    ),
+
+    pullup: (
+      <svg viewBox="0 0 120 170" width="100%" style={{ maxHeight:170 }}>
+        {/* Pull-up bar */}
+        <rect x="10" y="12" width="100" height="8" rx="3" fill="#555" stroke="#666" strokeWidth="0.8"/>
+        <rect x="10" y="4" width="6" height="16" rx="2" fill="#444" stroke="#555" strokeWidth="0.8"/>
+        <rect x="104" y="4" width="6" height="16" rx="2" fill="#444" stroke="#555" strokeWidth="0.8"/>
+        {/* Figure going up/down */}
+        <g style={{ animation:`exPull ${dur} ease-in-out infinite` }}>
+          <Head cx="60" cy="54"/>
+          {/* Arms up to bar */}
+          <Stick x1="60" y1="44" x2="40" y2="20" color={red}/><Joint cx="40" cy="20"/>
+          <Stick x1="40" y1="20" x2="35" y2="15" color={red}/>
+          <Stick x1="60" y1="44" x2="80" y2="20" color={red}/><Joint cx="80" cy="20"/>
+          <Stick x1="80" y1="20" x2="85" y2="15" color={red}/>
+          {/* Torso */}
+          <Stick x1="60" y1="64" x2="60" y2="105" color={muted} w={3}/>
+          <Joint cx="60" cy="105"/>
+          {/* Legs */}
+          <Stick x1="60" y1="105" x2="50" y2="140"/><Joint cx="50" cy="140"/>
+          <Stick x1="50" y1="140" x2="48" y2="160"/>
+          <Stick x1="60" y1="105" x2="70" y2="140"/><Joint cx="70" cy="140"/>
+          <Stick x1="70" y1="140" x2="72" y2="160"/>
+        </g>
+      </svg>
+    ),
+
+    curl: (
+      <svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
+        {/* Standing figure */}
+        <Head cx="60" cy="20"/>
+        <Stick x1="60" y1="30" x2="60" y2="85" color={muted} w={3}/>
+        <Joint cx="60" cy="85"/>
+        {/* Legs */}
+        <Stick x1="60" y1="85" x2="48" y2="125"/><Joint cx="48" cy="125"/>
+        <Stick x1="48" y1="125" x2="45" y2="155"/>
+        <Stick x1="60" y1="85" x2="72" y2="125"/><Joint cx="72" cy="125"/>
+        <Stick x1="72" y1="125" x2="75" y2="155"/>
+        {/* Right arm curling */}
+        <Stick x1="60" y1="50" x2="82" y2="65" color={muted}/>
+        <g style={{ transformOrigin:"82px 65px", animation:`exCurl ${dur} ease-in-out infinite` }}>
+          <Joint cx="82" cy="65"/>
+          <Stick x1="82" y1="65" x2="88" y2="100" color={red}/>
+          <Weight cx="88" cy="102"/>
+        </g>
+        {/* Left arm curling */}
+        <Stick x1="60" y1="50" x2="38" y2="65" color={muted}/>
+        <g style={{ transformOrigin:"38px 65px", animation:`exCurl ${dur} ease-in-out infinite` }}>
+          <Joint cx="38" cy="65"/>
+          <Stick x1="38" y1="65" x2="32" y2="100" color={red}/>
+          <Weight cx="32" cy="102"/>
+        </g>
+      </svg>
+    ),
+
+    ohp: (
+      <svg viewBox="0 0 160 160" width="100%" style={{ maxHeight:160 }}>
+        {/* Bar pressing overhead */}
+        <g style={{ animation:`exPress ${dur} ease-in-out infinite` }}>
+          <Bar x1="20" y1="28" x2="140" y2="28"/>
+          <Weight cx="20" cy="28"/><Weight cx="140" cy="28"/>
+        </g>
+        {/* Standing figure */}
+        <Head cx="80" cy="68"/>
+        <Stick x1="80" y1="78" x2="80" y2="118" color={muted} w={3}/>
+        <Joint cx="80" cy="118"/>
+        <Stick x1="80" y1="118" x2="65" y2="148"/>
+        <Stick x1="80" y1="118" x2="95" y2="148"/>
+        <Stick x1="65" y1="148" x2="58" y2="155" w={3}/>
+        <Stick x1="95" y1="148" x2="102" y2="155" w={3}/>
+        {/* Arms pressing */}
+        <g style={{ transformOrigin:"80px 80px", animation:`exPress ${dur} ease-in-out infinite` }}>
+          <Stick x1="80" y1="80" x2="55" y2="60" color={red}/><Joint cx="55" cy="60"/>
+          <Stick x1="55" y1="60" x2="42" y2="30" color={red}/>
+          <Stick x1="80" y1="80" x2="105" y2="60" color={red}/><Joint cx="105" cy="60"/>
+          <Stick x1="105" y1="60" x2="118" y2="30" color={red}/>
+        </g>
+      </svg>
+    ),
+
+    row: (
+      <svg viewBox="0 0 180 130" width="100%" style={{ maxHeight:130 }}>
+        {/* Bench support */}
+        <rect x="80" y="60" width="60" height="8" rx="3" fill="#333" stroke="#444" strokeWidth="0.8"/>
+        <rect x="82" y="68" width="6" height="30" rx="2" fill="#2a2a2a"/>
+        <rect x="128" y="68" width="6" height="30" rx="2" fill="#2a2a2a"/>
+        {/* Hinged torso */}
+        <Head cx="150" cy="40"/>
+        <Stick x1="140" y1="48" x2="90" y2="62" color={muted} w={3}/>
+        <Joint cx="90" cy="62"/>
+        {/* Support arm */}
+        <Stick x1="90" y1="62" x2="88" y2="95" color={muted}/>
+        {/* Legs */}
+        <Stick x1="90" y1="62" x2="72" y2="90"/><Joint cx="72" cy="90"/>
+        <Stick x1="72" y1="90" x2="68" y2="120"/>
+        {/* Pulling arm */}
+        <Stick x1="140" y1="54" x2="125" y2="60" color={muted}/>
+        <g style={{ transformOrigin:"125px 60px", animation:`exRow ${dur} ease-in-out infinite` }}>
+          <Joint cx="125" cy="60"/>
+          <Stick x1="125" y1="60" x2="90" y2="62" color={red}/>
+          <Weight cx="82" cy="62"/>
+        </g>
+      </svg>
+    ),
+
+    pushup: (
+      <svg viewBox="0 0 200 100" width="100%" style={{ maxHeight:100 }}>
+        <g style={{ animation:`exPushup ${dur} ease-in-out infinite` }}>
+          <Head cx="170" cy="28"/>
+          {/* Body plank */}
+          <rect x="60" y="40" width="100" height="10" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
+          {/* Arms */}
+          <Stick x1="155" y1="44" x2="148" y2="68" color={red}/><Joint cx="148" cy="68" r={4}/>
+          <Stick x1="148" y1="68" x2="145" y2="82"/>
+          <Stick x1="120" y1="44" x2="115" y2="68" color={red}/><Joint cx="115" cy="68" r={4}/>
+          <Stick x1="115" y1="68" x2="112" y2="82"/>
+          {/* Legs */}
+          <Stick x1="60" y1="48" x2="52" y2="78"/>
+          <Stick x1="68" y1="48" x2="60" y2="78"/>
+        </g>
+        {/* Floor */}
+        <line x1="20" y1="85" x2="180" y2="85" stroke="#333" strokeWidth="1.5"/>
+      </svg>
+    ),
+
+    lunge: (
+      <svg viewBox="0 0 160 170" width="100%" style={{ maxHeight:170 }}>
+        <Head cx="80" cy="20"/>
+        <Stick x1="80" y1="30" x2="80" y2="80" color={muted} w={3}/>
+        <Joint cx="80" cy="80"/>
+        {/* Arms out for balance */}
+        <Stick x1="80" y1="55" x2="50" y2="65" color={muted}/>
+        <Stick x1="80" y1="55" x2="110" y2="65" color={muted}/>
+        <g style={{ transformOrigin:"80px 80px", animation:`exLunge ${dur} ease-in-out infinite` }}>
+          {/* Front leg */}
+          <Stick x1="80" y1="80" x2="58" y2="118" color={red}/><Joint cx="58" cy="118"/>
+          <Stick x1="58" y1="118" x2="52" y2="155"/>
+          {/* Back leg */}
+          <Stick x1="80" y1="80" x2="102" y2="115" color={muted}/><Joint cx="102" cy="115"/>
+          <Stick x1="102" y1="115" x2="110" y2="140"/>
+          {/* Feet */}
+          <Stick x1="52" y1="155" x2="40" y2="158" w={3}/>
+          <Stick x1="110" y1="140" x2="120" y2="143" w={3}/>
+        </g>
+      </svg>
+    ),
+
+    plank: (
+      <svg viewBox="0 0 200 100" width="100%" style={{ maxHeight:100 }}>
+        <g style={{ animation:`exPlank ${dur} ease-in-out infinite` }}>
+          <Head cx="165" cy="32"/>
+          <rect x="58" y="46" width="100" height="10" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
+          {/* Forearms on floor */}
+          <Stick x1="148" y1="50" x2="140" y2="76" color={red}/>
+          <Stick x1="115" y1="50" x2="108" y2="76" color={red}/>
+          {/* Legs */}
+          <Stick x1="58" y1="50" x2="50" y2="76"/>
+          <Stick x1="66" y1="50" x2="58" y2="76"/>
+        </g>
+        <line x1="20" y1="78" x2="180" y2="78" stroke="#333" strokeWidth="1.5"/>
+      </svg>
+    ),
+
+    calves: (
+      <svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
+        <Head cx="60" cy="20"/>
+        <Stick x1="60" y1="30" x2="60" y2="85" color={muted} w={3}/>
+        <Stick x1="60" y1="55" x2="40" y2="70" color={muted}/>
+        <Stick x1="60" y1="55" x2="80" y2="70" color={muted}/>
+        <Joint cx="60" cy="85"/>
+        <Stick x1="60" y1="85" x2="48" y2="122"/><Joint cx="48" cy="122"/>
+        <Stick x1="60" y1="85" x2="72" y2="122"/><Joint cx="72" cy="122"/>
+        <g style={{ transformOrigin:"60px 122px", animation:`exCalves 1.2s ease-in-out infinite` }}>
+          <Stick x1="48" y1="122" x2="45" y2="150" color={red}/>
+          <Stick x1="72" y1="122" x2="75" y2="150" color={red}/>
+          <Stick x1="45" y1="150" x2="35" y2="154" w={3} color={red}/>
+          <Stick x1="75" y1="150" x2="85" y2="154" w={3} color={red}/>
+        </g>
+      </svg>
+    ),
+
+    fly: (
+      <svg viewBox="0 0 180 140" width="100%" style={{ maxHeight:140 }}>
+        {/* Bench */}
+        <rect x="30" y="78" width="120" height="8" rx="3" fill="#333" stroke="#444" strokeWidth="0.8"/>
+        <rect x="36" y="86" width="6" height="24" rx="2" fill="#2a2a2a"/>
+        <rect x="138" y="86" width="6" height="24" rx="2" fill="#2a2a2a"/>
+        <Head cx="148" cy="60"/>
+        <rect x="56" y="64" width="88" height="14" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
+        <Stick x1="56" y1="64" x2="40" y2="58"/><Joint cx="40" cy="58"/>
+        <Stick x1="144" y1="64" x2="160" y2="58"/><Joint cx="160" cy="58"/>
+        {/* Flying arms */}
+        <g style={{ transformOrigin:"56px 68px", animation:`exFly ${dur} ease-in-out infinite` }}>
+          <Stick x1="56" y1="68" x2="30" y2="52" color={red}/>
+          <Weight cx="24" cy="48"/>
+        </g>
+        <g style={{ transformOrigin:"144px 68px", animation:`exFly ${dur} ease-in-out infinite` }}>
+          <Stick x1="144" y1="68" x2="170" y2="52" color={red}/>
+          <Weight cx="174" cy="48"/>
+        </g>
+      </svg>
+    ),
+
+    hipthrust: (
+      <svg viewBox="0 0 200 130" width="100%" style={{ maxHeight:130 }}>
+        {/* Bench back support */}
+        <rect x="120" y="40" width="50" height="50" rx="4" fill="#222" stroke="#333" strokeWidth="0.8"/>
+        {/* Bar on hips */}
+        <Bar x1="40" y1="62" x2="130" y2="62"/>
+        <Weight cx="40" cy="62"/><Weight cx="130" cy="62"/>
+        {/* Figure thrusting */}
+        <g style={{ transformOrigin:"100px 75px", animation:`exSquat ${dur} ease-in-out infinite` }}>
+          <Head cx="152" cy="48"/>
+          {/* Torso */}
+          <Stick x1="140" y1="56" x2="90" y2="62" color={muted} w={3}/>
+          <Joint cx="90" cy="62"/>
+          {/* Upper legs */}
+          <Stick x1="90" y1="62" x2="72" y2="95" color={red}/><Joint cx="72" cy="95"/>
+          <Stick x1="90" y1="62" x2="82" y2="95" color={red}/><Joint cx="82" cy="95"/>
+          {/* Lower legs */}
+          <Stick x1="72" y1="95" x2="68" y2="125"/>
+          <Stick x1="82" y1="95" x2="78" y2="125"/>
+        </g>
+      </svg>
+    ),
+
+    generic: (
+      <svg viewBox="0 0 120 170" width="100%" style={{ maxHeight:170 }}>
+        <g style={{ animation:`exPress 2s ease-in-out infinite` }}>
+          <Head cx="60" cy="22"/>
+          <Stick x1="60" y1="32" x2="60" y2="88" color={muted} w={3}/>
+          <Stick x1="60" y1="50" x2="36" y2="68" color={red}/><Joint cx="36" cy="68"/>
+          <Stick x1="36" y1="68" x2="28" y2="52"/>
+          <Stick x1="60" y1="50" x2="84" y2="68" color={red}/><Joint cx="84" cy="68"/>
+          <Stick x1="84" y1="68" x2="92" y2="52"/>
+          <Joint cx="60" cy="88"/>
+          <Stick x1="60" y1="88" x2="46" y2="128"/><Joint cx="46" cy="128"/>
+          <Stick x1="46" y1="128" x2="42" y2="160"/>
+          <Stick x1="60" y1="88" x2="74" y2="128"/><Joint cx="74" cy="128"/>
+          <Stick x1="74" y1="128" x2="78" y2="160"/>
+          <Stick x1="42" y1="160" x2="32" y2="164" w={3}/>
+          <Stick x1="78" y1="160" x2="88" y2="164" w={3}/>
+        </g>
+      </svg>
+    ),
+  };
+
+  return (
+    <div style={{ background:"#0d0d0d", padding:"16px 12px", marginBottom:14, borderLeft:`3px solid ${RED}`, position:"relative" }}>
+      <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:8 }}>
+        ▶ MOVEMENT DEMO
+      </div>
+      <div style={{ display:"flex", justifyContent:"center" }}>
+        {animations[type] || animations.generic}
+      </div>
+      <div style={{ fontSize:10, color:MUTED, textAlign:"center", marginTop:6, letterSpacing:1 }}>
+        Simplified demo — focus on form tips below
+      </div>
+    </div>
+  );
+}
+
 /* ── EXERCISE DETAIL PANEL ───────────────────────── */
 function ExerciseDetailPanel({ exercise, onClose }) {
   const info = EXERCISE_INFO[exercise] || { primary:[], secondary:[], tips:[] };
@@ -2094,6 +2491,8 @@ function ExerciseDetailPanel({ exercise, onClose }) {
           <button onClick={onClose} style={{ background:"transparent", border:"none", color:"#555", fontSize:22, cursor:"pointer" }}>✕</button>
         </div>
         <div style={{ overflowY:"auto", padding:"16px", flex:1 }}>
+          {/* Movement animation */}
+          <ExerciseAnimation exercise={exercise}/>
           {/* Muscle diagram */}
           <div style={{ background:"#111", padding:"12px", marginBottom:14, borderLeft:`3px solid ${RED}` }}>
             <MuscleBodyDiagram primary={info.primary} secondary={info.secondary}/>
@@ -2158,6 +2557,8 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const activeGoals = profiles.find(p=>p.isActive)||profiles[0]||DEFAULT_GOALS;
   const [showSettings,setShowSettings]=useState(false);
   const [showFriends,setShowFriends]=useState(false);
+  const [coachMsg,setCoachMsg]=useState(()=>lsGet('im_coachMsg',null));
+  const [coachLoading,setCoachLoading]=useState(false);
   const [rankNotif,setRankNotif]=useState(null);
   const [prevScore,setPrevScore]=useState(()=>lsGet('im_prevScore',0));
   const [activeSession,setActiveSession]=useState(()=>{
@@ -2605,7 +3006,68 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
     setActiveSession(null); setRestTimer(null); setWorkoutSeconds(0); setTimerRunning(false);
   };
 
-  const goalLabel={ cut:"削 Cut", bulk:"増 Bulk", recomp:"変 Recomp", endure:"耐 Endure" };
+  const generateCoachMessage = async () => {
+    setCoachLoading(true);
+    try {
+      const today = new Date().toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"});
+      const weekAgo = Date.now() - 7*24*60*60*1000;
+      const weekSessions = sessions.filter(s=>new Date(s.date||0).getTime()>weekAgo);
+      const recentFood = foodLog.slice(-14);
+      const avgCals = recentFood.length
+        ? Math.round(recentFood.reduce((a,f)=>a+(f.calories||0),0)/Math.min(recentFood.length,7))
+        : 0;
+      const lastSleep = sleepLog.slice(-1)[0];
+      const streak = (() => {
+        const days = new Set(sessions.map(s=>s.date).filter(Boolean));
+        let s=0;
+        for(let i=0;i<30;i++){
+          const d=new Date(); d.setDate(d.getDate()-i);
+          const ds=d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+          if(days.has(ds)) s++; else if(i>0) break;
+        }
+        return s;
+      })();
+
+      const prompt = `You are a personal fitness coach inside a fitness app called Izana Mode. Write a short, personalized daily coaching message for ${user.name||"Warrior"}.
+
+Their data:
+- Goal: ${user.goal||"recomp"}
+- Today: ${today}
+- Workouts this week: ${weekSessions.length}
+- Current streak: ${streak} day${streak!==1?"s":""}
+- Avg calories (last 7 days): ${avgCals>0?`${avgCals} kcal`:"not tracked yet"}
+- Last sleep: ${lastSleep?`${lastSleep.hours}h, quality ${lastSleep.quality}/5, soreness ${lastSleep.soreness}/5`:"not logged"}
+- Last workout: ${weekSessions[weekSessions.length-1]?.name||"none this week"}
+
+Write a 2-3 sentence message that:
+1. Acknowledges their specific data in a concrete way
+2. Gives ONE actionable tip for today
+3. Matches the Tenjiku/warrior aesthetic — direct, motivating, not cheesy
+4. Uses their name once
+
+Keep it under 60 words. Do not use hashtags or emojis. Respond with ONLY the message text, nothing else.`;
+
+      const res = await fetch("/api/claude", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:200, messages:[{role:"user",content:prompt}] })
+      });
+      const data = await res.json();
+      const text = data.content?.find(b=>b.type==="text")?.text?.trim()||"";
+      if (text) {
+        const msg = { text, date:new Date().toDateString(), generated:Date.now() };
+        setCoachMsg(msg);
+        lsSet('im_coachMsg', msg);
+      }
+    } catch {}
+    setCoachLoading(false);
+  };
+
+  // Auto-generate coaching message once per day
+  useEffect(()=>{
+    if (!coachMsg || coachMsg.date !== new Date().toDateString()) {
+      generateCoachMessage();
+    }
+  },[]);
 
   const S={
     app:       { fontFamily:"'DM Sans', sans-serif", background:BG, minHeight:"100vh", maxWidth:420, margin:"0 auto", display:"flex", flexDirection:"column", color:TEXT },
@@ -2718,6 +3180,23 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                 {nextRank?`${activityScore-rank.min} / ${nextRank.min-rank.min} to ${nextRank.title}`:"Maximum rank achieved"}
               </div>
             </div>
+          </div>
+
+          {/* AI Coaching Card */}
+          <div style={{ background:"#0f0f0f", border:`1px solid #2a2a2a`, borderLeft:`3px solid ${RED}`, padding:"12px 14px", marginBottom:10 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2 }}>⚔ DAILY BRIEFING</div>
+              <button onClick={generateCoachMessage} disabled={coachLoading}
+                style={{ background:"transparent", border:`1px solid #333`, color:MUTED, fontSize:10, padding:"3px 8px", cursor:coachLoading?"default":"pointer", fontFamily:"'Bebas Neue'", letterSpacing:1 }}>
+                {coachLoading?"...":"↻ REFRESH"}
+              </button>
+            </div>
+            {coachLoading && !coachMsg
+              ? <div style={{ fontSize:12, color:MUTED, fontStyle:"italic" }}>Generating your briefing...</div>
+              : coachMsg
+              ? <div style={{ fontSize:13, color:WHITE, lineHeight:1.6 }}>{coachMsg.text}</div>
+              : <div style={{ fontSize:12, color:MUTED, fontStyle:"italic" }}>Log some activity to get your personalized briefing.</div>
+            }
           </div>
 
           <div style={{ display:"flex", gap:10, marginBottom:10 }}>
