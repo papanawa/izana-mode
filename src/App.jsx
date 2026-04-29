@@ -2192,62 +2192,74 @@ function ExerciseAnimation({ exercise }) {
     return "generic";
   };
 
-  const SVGFallback = () => {
-    const type = getType(exercise);
-    const svgs = {
-      bench: (<svg viewBox="0 0 160 120" width="100%" style={{ maxHeight:140 }}>
-        <rect x="20" y="82" width="120" height="8" rx="3" fill="#333" stroke="#444" strokeWidth="0.8"/>
-        <rect x="25" y="90" width="8" height="20" rx="2" fill="#2a2a2a"/>
-        <rect x="127" y="90" width="8" height="20" rx="2" fill="#2a2a2a"/>
-        <g style={{ animation:`exPress ${dur} ease-in-out infinite` }}>
-          <Bar x1="30" y1="38" x2="130" y2="38"/><Weight cx="30" cy="38"/><Weight cx="130" cy="38"/>
-        </g>
-        <Head cx="130" cy="68"/>
-        <rect x="60" y="68" width="60" height="14" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
-        <Stick x1="60" y1="75" x2="45" y2="60"/><Joint cx="45" cy="60"/><Stick x1="45" y1="60" x2="40" y2="82"/>
-        <Stick x1="60" y1="75" x2="52" y2="60"/><Joint cx="52" cy="60"/><Stick x1="52" y1="60" x2="47" y2="82"/>
-        <g style={{ transformOrigin:"110px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
-          <Stick x1="110" y1="72" x2="95" y2="52" color={RED}/><Joint cx="95" cy="52" r={4}/><Stick x1="95" y1="52" x2="80" y2="38" color={RED}/>
-        </g>
-        <g style={{ transformOrigin:"75px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
-          <Stick x1="75" y1="72" x2="75" y2="52" color={RED}/><Joint cx="75" cy="52" r={4}/><Stick x1="75" y1="52" x2="80" y2="38" color={RED}/>
-        </g>
-      </svg>),
-      squat: (<svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
-        <g style={{ transformOrigin:"60px 80px", animation:`exSquat ${dur} ease-in-out infinite` }}>
-          <Head cx="60" cy="18"/><Bar x1="20" y1="38" x2="100" y2="38"/><Weight cx="20" cy="38"/><Weight cx="100" cy="38"/>
-          <Stick x1="60" y1="28" x2="60" y2="65" color={RED} w={3}/>
-          <Stick x1="60" y1="38" x2="28" y2="38" color={muted}/><Stick x1="60" y1="38" x2="92" y2="38" color={muted}/>
-          <Joint cx="60" cy="65"/>
-        </g>
-        <g style={{ transformOrigin:"60px 65px", animation:`exSquat ${dur} ease-in-out infinite` }}>
-          <Stick x1="60" y1="65" x2="42" y2="98" color={RED}/><Joint cx="42" cy="98"/>
-          <Stick x1="42" y1="98" x2="38" y2="135"/>
-          <Stick x1="60" y1="65" x2="78" y2="98" color={RED}/><Joint cx="78" cy="98"/>
-          <Stick x1="78" y1="98" x2="82" y2="135"/>
-          <Stick x1="38" y1="135" x2="28" y2="140" w={3}/><Stick x1="82" y1="135" x2="92" y2="140" w={3}/>
-        </g>
-      </svg>),
-      generic: (<svg viewBox="0 0 120 170" width="100%" style={{ maxHeight:170 }}>
-        <g style={{ animation:`exPress 2s ease-in-out infinite` }}>
-          <Head cx="60" cy="22"/>
-          <Stick x1="60" y1="32" x2="60" y2="88" color={muted} w={3}/>
-          <Stick x1="60" y1="50" x2="36" y2="68" color={RED}/><Joint cx="36" cy="68"/>
-          <Stick x1="36" y1="68" x2="28" y2="52"/>
-          <Stick x1="60" y1="50" x2="84" y2="68" color={RED}/><Joint cx="84" cy="68"/>
-          <Stick x1="84" y1="68" x2="92" y2="52"/>
-          <Joint cx="60" cy="88"/>
-          <Stick x1="60" y1="88" x2="46" y2="128"/><Joint cx="46" cy="128"/>
-          <Stick x1="46" y1="128" x2="42" y2="160"/>
-          <Stick x1="60" y1="88" x2="74" y2="128"/><Joint cx="74" cy="128"/>
-          <Stick x1="74" y1="128" x2="78" y2="160"/>
-          <Stick x1="42" y1="160" x2="32" y2="164" w={3}/>
-          <Stick x1="78" y1="160" x2="88" y2="164" w={3}/>
-        </g>
-      </svg>),
-    };
-    return svgs[type] || svgs.generic;
-  };
+  const type = getType(exercise);
+  const svgFallback = type === "bench" ? (
+    <svg viewBox="0 0 160 120" width="100%" style={{ maxHeight:140 }}>
+      <rect x="20" y="82" width="120" height="8" rx="3" fill="#333" stroke="#444" strokeWidth="0.8"/>
+      <rect x="25" y="90" width="8" height="20" rx="2" fill="#2a2a2a"/>
+      <rect x="127" y="90" width="8" height="20" rx="2" fill="#2a2a2a"/>
+      <g style={{ animation:`exPress ${dur} ease-in-out infinite` }}>
+        <line x1="30" y1="38" x2="130" y2="38" stroke="#888" strokeWidth="5" strokeLinecap="round"/>
+        <rect x="26" y="29" width="8" height="18" rx="2" fill="#555"/><rect x="126" y="29" width="8" height="18" rx="2" fill="#555"/>
+      </g>
+      <ellipse cx="130" cy="68" rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>
+      <rect x="60" y="68" width="60" height="14" rx="4" fill="#222" stroke={muted} strokeWidth="0.7"/>
+      <g style={{ transformOrigin:"110px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
+        <line x1="110" y1="72" x2="95" y2="52" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="95" cy="52" r="4" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <line x1="95" y1="52" x2="80" y2="38" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+      </g>
+      <g style={{ transformOrigin:"75px 72px", animation:`exPress ${dur} ease-in-out infinite` }}>
+        <line x1="75" y1="72" x2="75" y2="52" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="75" cy="52" r="4" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <line x1="75" y1="52" x2="80" y2="38" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+      </g>
+    </svg>
+  ) : type === "squat" ? (
+    <svg viewBox="0 0 120 160" width="100%" style={{ maxHeight:160 }}>
+      <g style={{ transformOrigin:"60px 80px", animation:`exSquat ${dur} ease-in-out infinite` }}>
+        <ellipse cx="60" cy="18" rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>
+        <line x1="20" y1="38" x2="100" y2="38" stroke="#888" strokeWidth="5" strokeLinecap="round"/>
+        <rect x="16" y="29" width="8" height="18" rx="2" fill="#555"/><rect x="96" y="29" width="8" height="18" rx="2" fill="#555"/>
+        <line x1="60" y1="28" x2="60" y2="65" stroke={RED} strokeWidth="3" strokeLinecap="round"/>
+        <line x1="60" y1="38" x2="28" y2="38" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="38" x2="92" y2="38" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="60" cy="65" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
+      </g>
+      <g style={{ transformOrigin:"60px 65px", animation:`exSquat ${dur} ease-in-out infinite` }}>
+        <line x1="60" y1="65" x2="42" y2="98" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="42" cy="98" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <line x1="42" y1="98" x2="38" y2="135" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="65" x2="78" y2="98" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="78" cy="98" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <line x1="78" y1="98" x2="82" y2="135" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="38" y1="135" x2="28" y2="140" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
+        <line x1="82" y1="135" x2="92" y2="140" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
+      </g>
+    </svg>
+  ) : (
+    <svg viewBox="0 0 120 170" width="100%" style={{ maxHeight:170 }}>
+      <g style={{ animation:`exPress 2s ease-in-out infinite` }}>
+        <ellipse cx="60" cy="22" rx="10" ry="11" fill="#2a2a2a" stroke={muted} strokeWidth="0.8"/>
+        <line x1="60" y1="32" x2="60" y2="88" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
+        <line x1="60" y1="50" x2="36" y2="68" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="36" cy="68" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <line x1="36" y1="68" x2="28" y2="52" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="50" x2="84" y2="68" stroke={RED} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="84" cy="68" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <line x1="84" y1="68" x2="92" y2="52" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="60" cy="88" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <line x1="60" y1="88" x2="46" y2="128" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="46" cy="128" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <line x1="46" y1="128" x2="42" y2="160" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="60" y1="88" x2="74" y2="128" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <circle cx="74" cy="128" r="3.5" fill={joint} stroke={muted} strokeWidth="0.8"/>
+        <line x1="74" y1="128" x2="78" y2="160" stroke={muted} strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="42" y1="160" x2="32" y2="164" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
+        <line x1="78" y1="160" x2="88" y2="164" stroke={muted} strokeWidth="3" strokeLinecap="round"/>
+      </g>
+    </svg>
+  );
 
   return (
     <div style={{ background:"#0d0d0d", padding:"16px 12px", marginBottom:14, borderLeft:`3px solid ${RED}` }}>
@@ -2274,7 +2286,7 @@ function ExerciseAnimation({ exercise }) {
         </div>
       ) : (
         <div style={{ display:"flex", justifyContent:"center" }}>
-          <SVGFallback/>
+          {svgFallback}
         </div>
       )}
 
