@@ -2131,7 +2131,7 @@ function ExerciseAnimation({ exercise }) {
   const ASSET_SLUGS = {
     "Bench Press":"bench_press","Incline Dumbbell Press":"bench_press",
     "Squat":"squat","Front Squat":"squat","Hack Squat":"squat",
-    "Deadlift":"deadlift","Romanian Deadlift":"deadlift","Sumo Deadlift":"deadlift",
+    "Deadlift":"dead_lift","Romanian Deadlift":"dead_lift","Sumo Deadlift":"dead_lift",
     "Pull-Ups":"pull_ups","Overhead Press":"overhead_press",
     "Bicep Curls":"bicep_curl","Hammer Curls":"bicep_curl",
     "Barbell Row":"barbell_row","Push-Up":"push_up","Lunges":"lunge",
