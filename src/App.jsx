@@ -2129,14 +2129,28 @@ function ExerciseAnimation({ exercise }) {
   const TOTAL_FRAMES = 4;
 
   const ASSET_SLUGS = {
-    "Bench Press":"bench_press","Incline Dumbbell Press":"bench_press",
-    "Squat":"squat","Front Squat":"squat","Hack Squat":"squat",
-    "Deadlift":"dead_lift","Romanian Deadlift":"dead_lift","Sumo Deadlift":"dead_lift",
-    "Pull-Ups":"pull_ups","Overhead Press":"overhead_press",
-    "Bicep Curls":"bicep_curl","Hammer Curls":"bicep_curl",
-    "Barbell Row":"barbell_row","Push-Up":"push_up","Lunges":"lunge",
-    "Bulgarian Split Squat":"lunge","Plank":"plank","Calf Raises":"calves",
-    "Lateral Raises":"lateral_raise","Hip Thrust":"hip_thrust",
+    "Bench Press":            "bench_press",
+    "Incline Dumbbell Press": "incline_dumbell_press",
+    "Deadlift":               "dead_lift",
+    "Romanian Deadlift":      "romanian_deadlift",
+    "Sumo Deadlift":          "sumo_deadlift",
+    "Pull-Ups":               "pull_ups",
+    "Chin-Ups":               "chin_ups",
+    "Lat Pulldown":           "lat_pulldown",
+    "Barbell Row":            "barbell_row",
+    "Overhead Press":         "overhead_press",
+    "Lateral Raises":         "lateral_raises",
+    "Bicep Curls":            "bicep_curls",
+    "Hammer Curls":           "bicep_curls",
+    "Squat":                  "squat",
+    "Front Squat":            "front_squat",
+    "Hack Squat":             "hack_squat",
+    "Lunges":                 "lunges",
+    "Bulgarian Split Squat":  "lunges",
+    "Hip Thrust":             "hip_thrust",
+    "Calf Raises":            "calf_raises",
+    "Plank":                  "plank",
+    "Push-Up":                "push_up",
   };
 
   const slug = ASSET_SLUGS[exercise] || null;
