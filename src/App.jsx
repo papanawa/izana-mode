@@ -2916,6 +2916,8 @@ Keep it under 60 words. Do not use hashtags or emojis. Respond with ONLY the mes
     }
   },[]);
 
+  const goalLabel={ cut:"削 Cut", bulk:"増 Bulk", recomp:"変 Recomp", endure:"耐 Endure" };
+
   const S={
     app:       { fontFamily:"'DM Sans', sans-serif", background:BG, minHeight:"100vh", maxWidth:420, margin:"0 auto", display:"flex", flexDirection:"column", color:TEXT },
     header:    { background:BLACK, borderBottom:`3px solid ${RED}` },
