@@ -396,23 +396,53 @@ function WebcamCapture({ onCapture, onClose }) {
   );
 }
 
-/* ── RESULT CARD WITH QUANTITY ───────────────────── */
-function ResultCard({ result, quantity, onQuantityChange, onAdd, onBack, backLabel, extraBtn }) {
-  const q = quantity;
+/* ── UNIT CONVERSION HELPERS ─────────────────────── */
+const UNITS = ["serving","oz","g","lbs","kg","cup","tbsp","tsp","piece"];
+const UNIT_LABELS = { serving:"srv", oz:"oz", g:"g", lbs:"lbs", kg:"kg", cup:"cup", tbsp:"tbsp", tsp:"tsp", piece:"pc" };
+
+// Convert a quantity in given unit to grams
+// baseGrams = weight of 1 serving in grams (used to convert back to a multiplier)
+function unitToMultiplier(qty, unit, baseGrams) {
+  if (!qty || isNaN(qty)) return 1;
+  const q = parseFloat(qty);
+  if (unit === "serving" || unit === "piece") return q;
+  if (!baseGrams || baseGrams <= 0) return q; // fallback: treat as multiplier
+  const toGrams = { oz:28.3495, g:1, lbs:453.592, kg:1000, cup:240, tbsp:14.787, tsp:4.929 };
+  const grams = q * (toGrams[unit] || 1);
+  return grams / baseGrams;
+}
+
+// Try to parse grams from a serving string like "4 oz (113g)" or "100g"
+function parseBaseGrams(servingStr) {
+  if (!servingStr) return null;
+  // Match "(NNNg)" pattern
+  const parenMatch = servingStr.match(/\((\d+(?:\.\d+)?)\s*g\)/);
+  if (parenMatch) return parseFloat(parenMatch[1]);
+  // Match "NNNg" directly
+  const directMatch = servingStr.match(/^(\d+(?:\.\d+)?)\s*g\b/);
+  if (directMatch) return parseFloat(directMatch[1]);
+  // Match "NNN oz" → convert
+  const ozMatch = servingStr.match(/^(\d+(?:\.\d+)?)\s*oz\b/);
+  if (ozMatch) return parseFloat(ozMatch[1]) * 28.3495;
+  return null;
+}
+
+/* ── RESULT CARD WITH QUANTITY + UNITS ───────────── */
+function ResultCard({ result, quantity, unit, onQuantityChange, onUnitChange, onAdd, onBack, backLabel, extraBtn }) {
+  const baseGrams = parseBaseGrams(result.serving);
+  const multiplier = unitToMultiplier(quantity, unit, baseGrams);
+
   const scaled = {
-    calories: Math.round(result.calories * q),
-    protein:  Math.round(result.protein  * q * 10) / 10,
-    carbs:    Math.round(result.carbs    * q * 10) / 10,
-    fat:      Math.round(result.fat      * q * 10) / 10,
+    calories: Math.round(result.calories * multiplier),
+    protein:  Math.round(result.protein  * multiplier * 10) / 10,
+    carbs:    Math.round(result.carbs    * multiplier * 10) / 10,
+    fat:      Math.round(result.fat      * multiplier * 10) / 10,
   };
-  const qLabel = q % 1 === 0 ? String(q) : q.toFixed(1);
-  const dec = () => onQuantityChange(Math.max(0.5, parseFloat((q - 0.5).toFixed(1))));
-  const inc = () => onQuantityChange(parseFloat((q + 0.5).toFixed(1)));
 
   const addEntry = {
     ...result,
     ...scaled,
-    serving: q !== 1 ? `${qLabel} × ${result.serving}` : result.serving,
+    serving: `${quantity}${UNIT_LABELS[unit]} × ${result.serving}`,
   };
 
   return (
@@ -424,46 +454,68 @@ function ResultCard({ result, quantity, onQuantityChange, onAdd, onBack, backLab
           <div style={{ fontSize:11, color:MUTED, marginTop:2 }}>{result.serving} · per serving</div>
         </div>
         <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
-          <span style={{ background:( result.confidence==="high"?BLACK:RED)+"18", color:result.confidence==="high"?BLACK:RED, border:`1px solid ${result.confidence==="high"?BLACK:RED}44`, borderRadius:2, padding:"2px 7px", fontSize:10, fontWeight:600 }}>{result.confidence}</span>
-          {onBack && <button onClick={onBack} style={{ fontSize:10, color:RED, background:"transparent", border:"none", cursor:"pointer", padding:0, letterSpacing:0.3 }}>{backLabel||"← Back"}</button>}
+          <span style={{ background:(result.confidence==="high"?BLACK:RED)+"18", color:result.confidence==="high"?TEXT:RED, border:`1px solid ${result.confidence==="high"?BLACK:RED}44`, padding:"2px 7px", fontSize:10, fontWeight:600 }}>{result.confidence}</span>
+          {onBack && <button onClick={onBack} style={{ fontSize:10, color:RED, background:"transparent", border:"none", cursor:"pointer", padding:0 }}>{backLabel||"← Back"}</button>}
         </div>
       </div>
 
-      {/* Quantity selector */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:CARD2, padding:"10px 14px", marginBottom:12, borderLeft:`2px solid ${RED}` }}>
-        <div>
-          <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2 }}>QUANTITY</div>
-          {q !== 1 && <div style={{ fontSize:10, color:MUTED, marginTop:1 }}>{result.calories} kcal × {qLabel}</div>}
+      {/* Quantity + Unit selector */}
+      <div style={{ background:CARD2, padding:"10px 14px", marginBottom:12, borderLeft:`2px solid ${RED}` }}>
+        <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:MUTED, letterSpacing:2, marginBottom:8 }}>QUANTITY</div>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          {/* Quantity input */}
+          <input
+            value={quantity}
+            onChange={e=>onQuantityChange(e.target.value)}
+            type="text" inputMode="decimal"
+            style={{ width:70, background:CARD, border:`1px solid ${BORDER}`, borderBottom:`2px solid ${RED}`, color:TEXT, fontFamily:"'Bebas Neue'", fontSize:24, padding:"6px 10px", outline:"none", textAlign:"center" }}
+          />
+          {/* Unit selector */}
+          <div style={{ display:"flex", flexWrap:"wrap", gap:5, flex:1 }}>
+            {UNITS.map(u=>(
+              <button key={u} onClick={()=>onUnitChange(u)}
+                style={{ padding:"5px 8px", fontFamily:"'Bebas Neue'", fontSize:11, letterSpacing:0.5,
+                  background:unit===u?RED:CARD, color:unit===u?WHITE:MUTED,
+                  border:`1px solid ${unit===u?RED:BORDER}`, cursor:"pointer" }}>
+                {UNIT_LABELS[u]}
+              </button>
+            ))}
+          </div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-          <button onClick={dec} style={{ width:34, height:34, background:q<=0.5?CARD2:RED, color:q<=0.5?MUTED:WHITE, border:`1px solid ${q<=0.5?BORDER:RED}`, fontSize:20, fontWeight:700, cursor:q<=0.5?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>−</button>
-          <div style={{ fontFamily:"'Bebas Neue'", fontSize:28, color:TEXT, minWidth:36, textAlign:"center", lineHeight:1 }}>{qLabel}</div>
-          <button onClick={inc} style={{ width:34, height:34, background:RED, color:WHITE, border:`1px solid ${RED}`, fontSize:20, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>+</button>
-        </div>
+        {/* Conversion hint */}
+        {baseGrams && unit!=="serving" && unit!=="piece" && (
+          <div style={{ fontSize:10, color:MUTED, marginTop:6 }}>
+            {quantity}{UNIT_LABELS[unit]} = {Math.round(unitToMultiplier(quantity,unit,baseGrams)*baseGrams)}g · {Math.round(multiplier*10)/10}× serving
+          </div>
+        )}
+        {!baseGrams && unit!=="serving" && unit!=="piece" && (
+          <div style={{ fontSize:10, color:MUTED, marginTop:6 }}>
+            Unit conversion approximate — no gram weight in serving data
+          </div>
+        )}
       </div>
 
       {/* Live macros */}
       <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-        <div style={{ background:RED+"12", color:RED, borderRadius:0, padding:"8px 6px", textAlign:"center", flex:1, borderBottom:`2px solid ${RED}` }}>
-          <div style={{ fontFamily:"'Bebas Neue'", fontSize:20 }}>{scaled.calories}</div><div style={{ fontSize:9, color:MUTED }}>KCAL</div>
-        </div>
-        <div style={{ background:BLACK+"12", color:BLACK, borderRadius:0, padding:"8px 6px", textAlign:"center", flex:1, borderBottom:`2px solid ${BLACK}` }}>
-          <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color:BLACK }}>{scaled.protein}g</div><div style={{ fontSize:9, color:MUTED }}>PROT</div>
-        </div>
-        <div style={{ background:MUTED+"12", color:MUTED, borderRadius:0, padding:"8px 6px", textAlign:"center", flex:1, borderBottom:`2px solid ${MUTED}` }}>
-          <div style={{ fontFamily:"'Bebas Neue'", fontSize:20 }}>{scaled.carbs}g</div><div style={{ fontSize:9, color:MUTED }}>CARB</div>
-        </div>
-        <div style={{ background:RED_DIM+"12", color:RED_DIM, borderRadius:0, padding:"8px 6px", textAlign:"center", flex:1, borderBottom:`2px solid ${RED_DIM}` }}>
-          <div style={{ fontFamily:"'Bebas Neue'", fontSize:20 }}>{scaled.fat}g</div><div style={{ fontSize:9, color:MUTED }}>FAT</div>
-        </div>
+        {[
+          {val:scaled.calories, label:"KCAL", color:RED},
+          {val:`${scaled.protein}g`, label:"PROT", color:BLACK},
+          {val:`${scaled.carbs}g`, label:"CARB", color:MUTED},
+          {val:`${scaled.fat}g`, label:"FAT", color:RED_DIM},
+        ].map(({val,label,color})=>(
+          <div key={label} style={{ background:color+"12", borderRadius:0, padding:"8px 6px", textAlign:"center", flex:1, borderBottom:`2px solid ${color}` }}>
+            <div style={{ fontFamily:"'Bebas Neue'", fontSize:20, color }}>{val}</div>
+            <div style={{ fontSize:9, color:MUTED }}>{label}</div>
+          </div>
+        ))}
       </div>
 
       {result.notes && <div style={{ fontSize:11, color:MUTED, marginBottom:10, fontStyle:"italic" }}>ℹ️ {result.notes}</div>}
 
       <div style={{ display:"flex", gap:8 }}>
-        <button style={{ flex:1, background:RED, color:WHITE, border:"none", borderRadius:0, padding:"13px 16px", fontSize:13, fontWeight:600, fontFamily:"'DM Sans'", cursor:"pointer", letterSpacing:1, textTransform:"uppercase" }}
+        <button style={{ flex:1, background:RED, color:WHITE, border:"none", padding:"13px 16px", fontSize:13, fontWeight:600, fontFamily:"'DM Sans'", cursor:"pointer", letterSpacing:1, textTransform:"uppercase" }}
           onClick={()=>onAdd(addEntry)}>
-          + Add {q !== 1 ? `${qLabel} × ` : ""}to Log
+          + Add {quantity}{UNIT_LABELS[unit]} to Log
         </button>
         {extraBtn}
       </div>
@@ -478,6 +530,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
   const [result, setResult] = useState(null);
   const [options, setOptions] = useState([]);
   const [quantity, setQuantity] = useState(1);
+  const [unit, setUnit] = useState("serving");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [imgPreview, setImgPreview] = useState(null);
@@ -625,7 +678,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
     onAdd({ ...food, mealType, time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}), id:Date.now() });
   };
 
-  const selectResult = (r) => { setResult(r); setQuantity(1); };
+  const selectResult = (r) => { setResult(r); setQuantity(1); setUnit("serving"); };
 
   const S = {
     overlay: { position:"fixed", inset:0, zIndex:500, display:"flex", flexDirection:"column" },
@@ -735,7 +788,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
               <ResultCard
                 result={result}
                 quantity={quantity}
-                onQuantityChange={setQuantity}
+                onQuantityChange={setQuantity} unit={unit} onUnitChange={setUnit}
                 onAdd={(entry)=>{ quickAdd(entry); onClose(); }}
                 onBack={options.length>0?()=>setResult(null):null}
                 backLabel="← Other options"
@@ -823,7 +876,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
             {loading && <div style={{ textAlign:"center", padding:"12px 0", color:MUTED, fontSize:13 }}>🤖 Claude is analyzing your photo...</div>}
             {error && <div style={{ fontSize:12, color:RED, marginBottom:12 }}>{error}</div>}
             {result && (
-              <ResultCard result={result} quantity={quantity} onQuantityChange={setQuantity} onAdd={(entry)=>{ quickAdd(entry); onClose(); }}/>
+              <ResultCard result={result} quantity={quantity} onQuantityChange={setQuantity} unit={unit} onUnitChange={setUnit} onAdd={(entry)=>{ quickAdd(entry); onClose(); }}/>
             )}
           </>)}
 
@@ -847,7 +900,7 @@ function AddFoodPanel({ onAdd, onClose, favorites, recentFoods }) {
             )}
             {result && (
               <ResultCard
-                result={result} quantity={quantity} onQuantityChange={setQuantity}
+                result={result} quantity={quantity} onQuantityChange={setQuantity} unit={unit} onUnitChange={setUnit}
                 onAdd={(entry)=>{ quickAdd(entry); onClose(); }}
                 extraBtn={<button style={{ background:CARD2, color:TEXT, border:`1px solid ${BORDER}`, borderRadius:0, padding:"0 14px", fontSize:12, fontFamily:"'DM Sans'", cursor:"pointer" }}
                   onClick={()=>{ setBarcodeVal(null); setResult(null); setError(""); setQuantity(1); }}>Rescan</button>}
@@ -1010,6 +1063,44 @@ function SettingsPanel({ user, session, profiles, darkMode, onToggleDarkMode, on
                     <div style={S.label}>CALORIES (kcal)</div>
                     <input style={S.input} type="text" inputMode="numeric" value={g.calories||""} onChange={e=>setG(x=>({...x,calories:parseInt(e.target.value)||0}))}/>
                   </div>
+
+                  {/* Macro split % calculator */}
+                  <div style={{ marginBottom:12, background:CARD2, padding:"12px", borderLeft:`2px solid ${RED}` }}>
+                    <div style={{ fontFamily:"'Bebas Neue'", fontSize:11, color:RED, letterSpacing:2, marginBottom:10 }}>SET BY % SPLIT</div>
+                    <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                      {[
+                        {label:"Protein %", key:"protPct", color:RED},
+                        {label:"Carbs %",   key:"carbPct", color:MUTED},
+                        {label:"Fat %",     key:"fatPct",  color:RED_DIM},
+                      ].map(({label,key,color})=>(
+                        <div key={key} style={{ flex:1 }}>
+                          <div style={{ fontSize:9, color:color, letterSpacing:1, marginBottom:4 }}>{label}</div>
+                          <input type="text" inputMode="numeric" value={g[key]||""}
+                            onChange={e=>setG(x=>({...x,[key]:parseInt(e.target.value)||0}))}
+                            style={{ ...S.input, textAlign:"center", borderBottom:`2px solid ${color}` }}
+                            placeholder="0"/>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Show total % */}
+                    {((g.protPct||0)+(g.carbPct||0)+(g.fatPct||0)) > 0 && (
+                      <div style={{ fontSize:11, color:(g.protPct||0)+(g.carbPct||0)+(g.fatPct||0)===100?RED:MUTED, marginBottom:8 }}>
+                        Total: {(g.protPct||0)+(g.carbPct||0)+(g.fatPct||0)}% {(g.protPct||0)+(g.carbPct||0)+(g.fatPct||0)===100?"✓":"(should equal 100%)"}
+                      </div>
+                    )}
+                    <button style={{ ...S.btnSm, width:"100%" }}
+                      disabled={!g.calories||(g.protPct||0)+(g.carbPct||0)+(g.fatPct||0)!==100}
+                      onClick={()=>{
+                        const cal = g.calories||0;
+                        const protein = Math.round((cal*(g.protPct||0)/100)/4);
+                        const carbs   = Math.round((cal*(g.carbPct||0)/100)/4);
+                        const fat     = Math.round((cal*(g.fatPct||0)/100)/9);
+                        setG(x=>({...x, protein, carbs, fat}));
+                      }}>
+                      Apply Split → Calculate Grams
+                    </button>
+                  </div>
+
                   <div style={S.row}>
                     <div style={S.macroInput}>
                       <div style={S.label}>PROTEIN (g)</div>
@@ -2095,6 +2186,7 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
   const [expandedSession,setExpandedSession]=useState(null); // workout history detail
   const [volumeExercise,setVolumeExercise]=useState(null); // exercise to show volume chart for
   const [notifEnabled,setNotifEnabled]=useState(()=>lsGet('im_notifEnabled',false));
+  const [muteTimer,setMuteTimer]=useState(()=>lsGet('im_muteTimer',false));
   const [bodyMeasurements,setBodyMeasurements]=useState(()=>lsGet('im_bodyMeasurements',[]));
   const [newMeasurement,setNewMeasurement]=useState({ chest:"", waist:"", hips:"", arms:"", thighs:"" });
   const [newWeight,setNewWeight]=useState("");
@@ -2197,11 +2289,13 @@ function MainApp({ user, session, onSignOut, darkMode, onToggleDarkMode }) {
     return ()=>clearInterval(interval);
   },[activeSession?.id, timerRunning]);
 
+  useEffect(()=>lsSet('im_muteTimer', muteTimer),[muteTimer]);
+
   // Rest timer — counts down
   useEffect(()=>{
     if(!restTimer) return;
     if(restTimer.seconds<=0){
-      playZenBowl();
+      if (!muteTimer) playZenBowl();
       try { navigator.vibrate?.([200,100,200]); } catch {}
       setRestTimer(null);
       return;
@@ -3226,7 +3320,7 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
 
           {/* Save & Finish */}
           {!showExercisePicker&&<>
-            {/* Rest duration selector */}
+            {/* Rest duration selector + mute */}
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
               <span style={{ fontSize:11, color:MUTED, flexShrink:0 }}>Rest timer:</span>
               {[{s:60,label:"1M"},{s:90,label:"1.5M"},{s:120,label:"2M"},{s:180,label:"3M"}].map(({s,label})=>(
@@ -3235,6 +3329,10 @@ Include Breakfast, Lunch, Dinner, Snack for each day.` }]
                   {label}
                 </button>
               ))}
+              <button onClick={()=>setMuteTimer(m=>!m)} title={muteTimer?"Unmute sound":"Mute sound"}
+                style={{ flexShrink:0, background:muteTimer?CARD2:RED+"22", border:`1px solid ${muteTimer?BORDER:RED}`, color:muteTimer?MUTED:RED, padding:"6px 8px", cursor:"pointer", fontSize:13 }}>
+                {muteTimer?"🔇":"🔔"}
+              </button>
             </div>
 
             {showSaveWorkout
