@@ -2150,7 +2150,7 @@ function ExerciseAnimation({ exercise }) {
     "Hip Thrust":             "hip_thrust",
     "Calf Raises":            "calf_raises",
     "Plank":                  "plank",
-    "Push-Up":                "push_up",
+    "Push-Ups":               "push_up",
   };
 
   const slug = ASSET_SLUGS[exercise] || null;
