@@ -428,7 +428,7 @@ function parseBaseGrams(servingStr) {
 }
 
 /* ── RESULT CARD WITH QUANTITY + UNITS ───────────── */
-function ResultCard({ result, quantity, unit, onQuantityChange, onUnitChange, onAdd, onBack, backLabel, extraBtn }) {
+function ResultCard({ result, quantity, unit="serving", onQuantityChange, onUnitChange=()=>{}, onAdd, onBack, backLabel, extraBtn }) {
   const baseGrams = parseBaseGrams(result.serving);
   const multiplier = unitToMultiplier(quantity, unit, baseGrams);
 
