@@ -2313,7 +2313,7 @@ function ExerciseAnimation({ exercise }) {
         )}
       </div>
       {hasAsset ? (
-        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", minHeight:200 }}>
+        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", minHeight:200, background:"#f5f5f5", borderRadius:2 }}>
           <img
             src={`/exercises/${slug}/frame_0${frame}.png`}
             alt={`${exercise} frame ${frame}`}
